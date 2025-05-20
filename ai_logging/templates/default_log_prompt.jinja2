@@ -1,0 +1,43 @@
+{#
+  Default Jinja2 template for formatting a batch of log records for an AI model.
+  Variables available:
+  - logs: A list of log record dictionaries. Each dictionary contains keys like:
+    - timestamp
+    - levelname
+    - message
+    - pathname
+    - funcName
+    - lineno
+    - exception (if any)
+    - stack_info (if any)
+    - extras (if any)
+#}
+Analyze the following batch of application log records. Identify any potential issues, errors, or noteworthy patterns.
+Provide a concise summary of your findings. If there are critical errors, highlight them.
+
+Log Batch ({{ logs|length }} records):
+==================================================
+
+{% for log_entry in logs %}
+Timestamp: {{ log_entry.timestamp }}
+Level:     {{ log_entry.levelname }}
+Logger:    {{ log_entry.name }}
+Message:   {{ log_entry.message }}
+{% if log_entry.pathname %}Source:    {{ log_entry.pathname }}:{{ log_entry.lineno }} (in {{ log_entry.funcName }}){% endif %}
+{% if log_entry.exception %}
+Exception Info:
+{{ log_entry.exception|indent(2, true) }}
+{% endif %}
+{% if log_entry.stack_info %}
+Stack Info:
+{{ log_entry.stack_info|indent(2, true) }}
+{% endif %}
+{% if log_entry.extras %}
+Extra Data: {{ log_entry.extras|tojson }}
+{% endif %}
+--------------------------------------------------
+{% endfor %}
+
+End of Log Batch.
+
+AI Analysis Summary:
