@@ -110,9 +110,7 @@ class AIHandler(logging.Handler):
         self._flush_timer.start()
 
     def _timed_flush(self) -> None:
-        with self._buffer_lock:
-            if self._buffer:
-                self.flush()
+        self.flush()  # flush() checks the buffer under the lock itself
         self._start_flush_timer()
 
     def emit(self, record: logging.LogRecord) -> None:

@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from typing import Optional
 
@@ -198,7 +199,7 @@ class AILoggingMetrics:
 
 # --- Singleton Instance ---
 _metrics_instance: Optional[AILoggingMetrics] = None
-_metrics_lock = object()
+_metrics_lock = threading.Lock()
 
 def get_metrics_instance() -> AILoggingMetrics:
     """Returns a singleton instance of AILoggingMetrics."""
