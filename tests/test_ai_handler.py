@@ -45,11 +45,21 @@ def test_close_drains_buffer():
     assert len(h.llm_router.calls) == 1
 
 def test_router_exception_never_propagates_to_caller():
+    # Also restores the coverage lost when processing moved to the worker
+    # thread: a batch that raises must not kill the worker, so a second
+    # batch emitted afterward must still reach the router.
     class BoomRouter:
-        def route_prompt(self, p, r): raise RuntimeError("api down")
-    h = make_handler(llm_router=BoomRouter(), batch_size=1, flush_interval=60, max_retries=0)
+        def __init__(self):
+            self.calls = 0
+        def route_prompt(self, p, r):
+            self.calls += 1
+            raise RuntimeError("api down")
+    router = BoomRouter()
+    h = make_handler(llm_router=router, batch_size=1, flush_interval=60, max_retries=0)
     h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "x", None, None))  # must not raise
-    h.close()
+    h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "y", None, None))  # worker must have survived
+    h.close()  # deterministic: close() drains and joins the worker
+    assert router.calls == 2, "a batch that raises must not kill the worker thread"
 
 def test_pii_scrubbed_before_prompt():
     h = make_handler(batch_size=1, flush_interval=60)
@@ -99,6 +109,18 @@ def test_emit_returns_fast_even_when_provider_is_slow():
     h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None))
     assert time.time() - t0 < 0.5, "emit blocked on the AI call"
     h.close()  # close still waits for in-flight work
+
+
+def test_post_close_emit_is_logged_not_silently_dropped(caplog):
+    # Once the worker has exited (after close()), a flush-triggering emit
+    # must never silently vanish into a queue nobody drains -- it must be
+    # logged instead.
+    h = make_handler(batch_size=1, flush_interval=60)
+    h.close()
+    with caplog.at_level(logging.WARNING, logger="ai_logging.handlers.ai_handler"):
+        h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "after close", None, None))
+    assert not h.llm_router.calls, "router must not be called after the worker has exited"
+    assert "no longer running" in caplog.text
 
 
 def test_close_stops_flush_timer_permanently():

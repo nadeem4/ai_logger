@@ -65,6 +65,11 @@ class AIHandler(logging.Handler):
         # allow_request()/record_success()/record_failure() sequence in
         # _process_batch is only safe with batches processed serially.
         self._work_q: queue.Queue = queue.Queue()
+        # Guards against silently dropping batches once the worker is gone
+        # (it exited after a prior close(), or -- in principle -- died).
+        # A dead worker is logged once, not once per dropped batch.
+        self._worker_dead_logged = False
+        self._worker_dead_lock = threading.Lock()
 
         # Circuit breaker: protects the router call from repeatedly hammering
         # a failing LLM provider. See ai_logging/utils/circuit_breaker.py.
@@ -259,7 +264,30 @@ class AIHandler(logging.Handler):
         # _buffer_lock may re-enter -- this file has already been bitten
         # twice by that class of deadlock.
         if records_to_process:
-            self._work_q.put(records_to_process)
+            # A put() onto a queue whose only consumer has already exited
+            # (the worker returned after a prior close(), or -- in
+            # principle -- died) would sit there forever with nothing to
+            # observe it: a silent, permanent loss. Gate on liveness and
+            # log instead, once, rather than swallowing the batch.
+            if self._worker.is_alive():
+                self._work_q.put(records_to_process)
+            else:
+                self._log_worker_dead_once(len(records_to_process))
+
+    def _log_worker_dead_once(self, dropped_count: int) -> None:
+        with self._worker_dead_lock:
+            if self._worker_dead_logged:
+                return
+            self._worker_dead_logged = True
+        try:
+            logging.getLogger(__name__).warning(
+                "AIHandler worker thread is no longer running; dropping a "
+                "batch of %d record(s) instead of enqueuing it (further "
+                "drops will not be logged individually)",
+                dropped_count,
+            )
+        except Exception:
+            pass
 
     def _worker_loop(self) -> None:
         """Runs on the single background worker thread. Pulls one batch at
@@ -267,25 +295,39 @@ class AIHandler(logging.Handler):
         retry backoff sleep) never blocks the caller's thread. A None
         sentinel, enqueued by close(), ends the loop.
 
-        Wrapped so a surprise exception can never kill this thread -- if it
-        died, every batch enqueued afterward would be silently dropped.
+        The whole loop body -- not just the _process_batch call -- is
+        guarded so a surprise exception can never kill this thread; if it
+        died, every batch enqueued afterward would be silently dropped
+        (see flush()'s liveness check, which logs exactly that if it ever
+        happens). SystemExit/KeyboardInterrupt are treated as genuinely
+        fatal and re-raised rather than swallowed.
         """
         while True:
-            batch = self._work_q.get()
-            if batch is None:
-                return
             try:
-                self._process_batch(batch)
-            except Exception:
-                # handleError(None) is unsafe: logging.Handler.handleError
-                # accesses record attributes and can itself raise when record
-                # is None. A router/processing failure must never escape the
-                # handler (nor kill the worker thread), so log it
-                # defensively instead.
+                batch = self._work_q.get()
+                if batch is None:
+                    return
+                try:
+                    self._process_batch(batch)
+                except Exception:
+                    # handleError(None) is unsafe: logging.Handler.handleError
+                    # accesses record attributes and can itself raise when record
+                    # is None. A router/processing failure must never escape the
+                    # handler (nor kill the worker thread), so log it
+                    # defensively instead.
+                    try:
+                        logging.getLogger(__name__).exception(
+                            "AIHandler worker failed to process a batch of %d record(s)",
+                            len(batch),
+                        )
+                    except Exception:
+                        pass
+            except (SystemExit, KeyboardInterrupt):
+                raise
+            except BaseException:
                 try:
                     logging.getLogger(__name__).exception(
-                        "AIHandler worker failed to process a batch of %d record(s)",
-                        len(batch),
+                        "AIHandler worker loop encountered an unexpected error; continuing"
                     )
                 except Exception:
                     pass
@@ -299,11 +341,31 @@ class AIHandler(logging.Handler):
         self.flush()
         self._work_q.put(None)
         # Bounded join: an unbounded join on a wedged provider call would
-        # hang interpreter shutdown. Safe to call close() twice -- a
-        # second call finds the buffer empty (flush() is then a no-op) and
-        # joins a worker that is either already dead (returns immediately)
-        # or still draining the first sentinel's queue.
-        self._worker.join(self.flush_interval + 30)
+        # hang interpreter shutdown. Capped at 60s regardless of
+        # flush_interval -- flush_interval + 30 could otherwise be an hour
+        # for a handler configured with a large flush_interval, which
+        # would block logging.shutdown() for that long. Safe to call
+        # close() twice -- a second call finds the buffer empty (flush()
+        # is then a no-op, or -- if the worker already died -- gated by
+        # the liveness check in flush() above) and joins a worker that is
+        # either already dead (returns immediately) or still draining the
+        # first sentinel's queue.
+        self._worker.join(min(self.flush_interval + 30, 60))
+        if self._worker.is_alive():
+            # join() timed out: the worker is wedged (almost certainly in
+            # the AI call or its retry backoff) and was not observed to
+            # finish. qsize() undercounts by one if a batch is mid-flight
+            # inside _process_batch right now, but it's the best estimate
+            # available without new machinery.
+            try:
+                logging.getLogger(__name__).warning(
+                    "AIHandler worker did not stop within the shutdown "
+                    "timeout; approximately %d batch(es) (plus any batch "
+                    "currently being processed) may be left unprocessed",
+                    self._work_q.qsize(),
+                )
+            except Exception:
+                pass
         super().close()
 
 if __name__ == '__main__':
