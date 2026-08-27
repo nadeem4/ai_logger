@@ -153,7 +153,7 @@ class AIHandler(logging.Handler):
             return
 
         self.metrics.ai_handler_batches_processed_total.inc()
-        self.metrics.ai_handler_batch_size_bytes.observe(len(batch))
+        self.metrics.ai_handler_batch_size_records.observe(len(batch))
 
         processed_records: List[Dict[str, Any]] = []
         highest_severity = 0
@@ -167,7 +167,7 @@ class AIHandler(logging.Handler):
         prompt = self._build_prompt_with_jinja(processed_records)
 
         if self.circuit_breaker_state == "OPEN" and time.time() < self.circuit_breaker_open_until:
-            self.metrics.ai_calls_total.inc(model_name="N/A", status="circuit_open")
+            self.metrics.ai_calls_total.labels(model="N/A", status="circuit_open").inc()
             return
 
         attempt = 0
@@ -177,8 +177,8 @@ class AIHandler(logging.Handler):
                 start_time = time.time()
                 ai_response = self.llm_router.route_prompt(prompt, processed_records)
                 latency = time.time() - start_time
-                self.metrics.ai_calls_total.inc(model_name="llm", status="success")
-                self.metrics.ai_call_latency_seconds.observe(latency, model_name="llm")
+                self.metrics.ai_calls_total.labels(model="llm", status="success").inc()
+                self.metrics.ai_call_latency_seconds.labels(model="llm").observe(latency)
                 if self.circuit_breaker_state == "HALF_OPEN":
                     self.circuit_breaker_state = "CLOSED"
                     self.circuit_breaker_fail_count = 0
@@ -186,14 +186,14 @@ class AIHandler(logging.Handler):
                 succeeded = True
                 break
             except Exception as e:
-                self.metrics.ai_calls_total.inc(model_name="llm", status="error")
-                self.metrics.ai_call_errors_total.inc(model_name="llm", error_type=type(e).__name__)
+                self.metrics.ai_calls_total.labels(model="llm", status="error").inc()
+                self.metrics.ai_call_errors_total.labels(model="llm", error_type=type(e).__name__).inc()
                 self.circuit_breaker_fail_count += 1
                 if self.circuit_breaker_fail_count >= 3:
                     self.circuit_breaker_state = "OPEN"
                     self.circuit_breaker_open_until = time.time() + 60  # Open for 60 seconds
-                    self.metrics.ai_circuit_breaker_state_changes_total.inc(model_name="llm", new_state="OPEN")
-                    self.metrics.ai_circuit_breaker_currently_open.set(1, model_name="llm")
+                    self.metrics.ai_circuit_breaker_state_changes_total.labels(model="llm", new_state="OPEN").inc()
+                    self.metrics.ai_circuit_breaker_currently_open.labels(model="llm").set(1)
                 # Only back off if another attempt is actually going to happen.
                 if attempt < self.max_retries:
                     backoff = self.retry_backoff_factor * (2 ** attempt)
@@ -202,8 +202,8 @@ class AIHandler(logging.Handler):
 
         if not succeeded:
             # All retries failed (or max_retries == 0 and the single attempt failed).
-            self.metrics.ai_circuit_breaker_state_changes_total.inc(model_name="llm", new_state="OPEN")
-            self.metrics.ai_circuit_breaker_currently_open.set(1, model_name="llm")
+            self.metrics.ai_circuit_breaker_state_changes_total.labels(model="llm", new_state="OPEN").inc()
+            self.metrics.ai_circuit_breaker_currently_open.labels(model="llm").set(1)
 
     def _build_prompt_with_jinja(self, records: List[Dict[str, Any]]) -> str:
         try:

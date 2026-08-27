@@ -1,7 +1,5 @@
 import logging, threading, time
-import pytest
 from ai_logging.handlers.ai_handler import AIHandler
-from ai_logging.metrics.prometheus import PlaceholderMetric
 
 class FakeRouter:
     def __init__(self):
@@ -61,44 +59,9 @@ def test_pii_scrubbed_before_prompt():
     assert "[REDACTED_EMAIL]" in prompt
     h.close()
 
-# --- Review fix-round-1 tests below ---
-#
-# `AIHandler.metrics` is normally `get_metrics_instance()`, which — with
-# prometheus_client installed and prometheus enabled by default — returns
-# real `prometheus_client.Counter`/`Histogram` objects. The handler's
-# call-sites pass label names as kwargs to `.inc()`/`.observe()` (e.g.
-# `.inc(model_name="llm", status="success")`), which the real client
-# rejects with TypeError; that mismatch is Task 10's to fix, not ours.
-# Today that TypeError fires on every batch and is absorbed by flush()'s
-# broad `except Exception`, which incidentally short-circuits the retry
-# loop and the response callback before either can be exercised. The
-# `PlaceholderMetric` class (used before `_replace_placeholders_with_real_metrics`
-# swaps in real client objects) accepts arbitrary `**labels` and never
-# raises, so substituting it as the handler's `.metrics` after construction
-# lets these tests exercise the real retry-loop and response-delivery code
-# paths without touching the metrics call-sites or `prometheus.py`.
-
-
-class _PlaceholderHandlerMetrics:
-    """Stand-in for AILoggingMetrics using only PlaceholderMetric attributes,
-    so AIHandler's metrics calls never raise regardless of the real
-    prometheus_client label-API mismatch (Task 10's territory)."""
-
-    def __init__(self):
-        self.ai_handler_records_processed_total = PlaceholderMetric("stub_records_total", "d")
-        self.ai_handler_batches_processed_total = PlaceholderMetric("stub_batches_total", "d")
-        self.ai_handler_batch_size_bytes = PlaceholderMetric("stub_batch_size", "d")
-        self.ai_calls_total = PlaceholderMetric("stub_ai_calls_total", "d")
-        self.ai_call_latency_seconds = PlaceholderMetric("stub_ai_call_latency", "d")
-        self.ai_call_errors_total = PlaceholderMetric("stub_ai_call_errors_total", "d")
-        self.ai_circuit_breaker_state_changes_total = PlaceholderMetric("stub_cb_state_changes", "d")
-        self.ai_circuit_breaker_currently_open = PlaceholderMetric("stub_cb_currently_open", "d")
-
-
 def test_retry_loop_single_failure_does_not_sleep():
     # Covers the brief's "verify a single failure doesn't sleep" requirement
-    # against the real retry-loop code path (see module note above for why
-    # the metrics are stubbed).
+    # against the real retry-loop code path.
     class BoomRouter:
         def __init__(self):
             self.call_count = 0
@@ -108,7 +71,6 @@ def test_retry_loop_single_failure_does_not_sleep():
 
     router = BoomRouter()
     h = make_handler(llm_router=router, batch_size=1, flush_interval=60, max_retries=0)
-    h.metrics = _PlaceholderHandlerMetrics()
     start = time.time()
     h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "x", None, None))  # must not raise, must not sleep
     elapsed = time.time() - start
@@ -117,7 +79,6 @@ def test_retry_loop_single_failure_does_not_sleep():
     h.close()
 
 
-@pytest.mark.xfail(strict=True, reason="metrics label API mismatch — fixed by Task 10")
 def test_ai_response_callback_invoked_on_success():
     received = []
     h = make_handler(batch_size=1, flush_interval=60, ai_response_callback=received.append)
