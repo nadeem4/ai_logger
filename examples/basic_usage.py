@@ -120,11 +120,10 @@ def setup_basic_ai_logging():
 
     # --- 8. Cleanly shutdown the listener and handlers ---
     print("AI Logging Example: Shutting down...")
-    if 'log_listener' in locals() and log_listener.is_alive(): # Check if listener was started
-        print("AI Logging Example: Stopping QueueListener...")
-        log_listener.stop() # Stops the listener thread
-        print("AI Logging Example: QueueListener stopped.")
-    
+    print("AI Logging Example: Stopping QueueListener...")
+    log_listener.stop() # Stops the listener thread (logging.handlers.QueueListener has no is_alive())
+    print("AI Logging Example: QueueListener stopped.")
+
     # AIHandler's close method will also flush any remaining logs.
     # This is automatically called on handlers when logging.shutdown() is called,
     # but explicit close is good practice if you manage handlers directly.
@@ -134,7 +133,7 @@ def setup_basic_ai_logging():
     # logging.shutdown() # This will close all handlers
 
     print("\nAI Logging Example: Basic usage demo complete.")
-    print("Check console output for logs processed by the listener and AIHandler's (simulated) AI interactions.")
+    print("Check console output for logs processed by the listener and AIHandler's AI interactions.")
     if settings.ai_logging_prometheus_enabled:
          print(f"If Prometheus server is running, check metrics at http://localhost:{settings.ai_logging_prometheus_port}/")
 
@@ -146,25 +145,15 @@ if __name__ == "__main__":
     # os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_API_KEY" # Replace if you want to test real OpenAI calls
     # os.environ["AI_LOGGING_PROMETHEUS_ENABLED"] = "true"
     # os.environ["AI_LOGGING_JINJA_LOG_PROMPT_TEMPLATE_NAME"] = "default_log_prompt.jinja2"
-    # os.environ["AI_LOGGING_GPT4_MODEL_NAME"] = "gpt-4-turbo-preview" # Example
+    # os.environ["AI_LOGGING_CAPABLE_MODEL"] = "gpt-4-turbo-preview" # Example
     
-    # If OPENAI_API_KEY is not set, LLMRouter will use placeholders and log warnings.
+    # If OPENAI_API_KEY (or ANTHROPIC_API_KEY, depending on AI_LOGGING_PROVIDER) is not
+    # set, LLMRouter has no provider configured: it logs a warning and route_prompt()
+    # returns None instead of making an AI call.
     if not os.getenv("OPENAI_API_KEY"):
-        print("WARNING: OPENAI_API_KEY environment variable is not set. AI calls will be simulated by placeholders.")
+        print("WARNING: OPENAI_API_KEY environment variable is not set. LLMRouter will have no provider")
+        print("         configured, so AI calls will be skipped (route_prompt() returns None).")
         print("         Set this variable if you want to test with actual OpenAI models.\n")
 
     setup_basic_ai_logging()
-
-    # Keep alive if Prometheus server is running and needs to be scraped
-    s = get_settings()
-    if s.ai_logging_prometheus_enabled and 'start_prometheus_server_if_enabled' in globals():
-        # Check if the server actually started (crude check, real check is harder)
-        # For this demo, just keep alive if it was enabled.
-        print("\nPrometheus server might be running. Press Ctrl+C to exit example.")
-        try:
-            while True:
-                time.sleep(10)
-        except KeyboardInterrupt:
-            print("\nExample finished.")
-        finally:
-            logging.shutdown() # Ensure all handlers are closed
+    logging.shutdown() # Ensure all handlers are closed

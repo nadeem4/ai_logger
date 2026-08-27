@@ -2,12 +2,12 @@
 
 **`ai_logging` is a Python logging toolkit designed to enhance standard logging with AI-powered analysis, insights, and intelligent routing.**
 
-It seamlessly integrates with the standard Python `logging` module, allowing youto send processed log data to Large Language Models (LLMs) like OpenAI's GPT series or local HuggingFace models for advanced analysis, anomaly detection, or summarization.
+It seamlessly integrates with the standard Python `logging` module, allowing you to send processed log data to Large Language Models (LLMs) via OpenAI or Anthropic for advanced analysis, anomaly detection, or summarization.
 
 ## Key Features
 
 *   **AI-Powered Log Analysis**: Send batches of logs to LLMs for insights.
-*   **Intelligent Routing**: Route logs to different LLMs (e.g., GPT-4 for critical errors, GPT-3.5 for warnings, local models for debug) based on severity or custom logic using LangChain.
+*   **Intelligent Routing**: Route logs to a fast or capable model tier based on the highest log severity in a batch, using pluggable OpenAI and Anthropic providers.
 *   **Asynchronous Logging**: Built-in support for `QueueHandler` and `QueueListener` to prevent blocking application threads.
 *   **PII Scrubbing**: Automatically detect and redact common Personally Identifiable Information (PII) from logs before sending them to AI models. Customizable rules.
 *   **JSON Formatting**: Flexible JSON log formatter for structured logging.
@@ -15,7 +15,7 @@ It seamlessly integrates with the standard Python `logging` module, allowing you
 *   **Jinja2 Prompt Templating**: Customize prompts sent to LLMs using Jinja2 templates. A default template is provided.
 *   **Configuration via Environment Variables**: Uses Pydantic for robust settings management (e.g., API keys, model names, batch sizes, feature flags).
 *   **Prometheus Metrics**: Exposes key operational metrics (e.g., logs processed, AI calls, errors, latencies, queue depth, circuit breaker state) for monitoring.
-*   **Circuit Breaker**: Basic circuit breaker pattern to temporarily halt AI calls if models are consistently failing.
+*   **Circuit Breaker**: CLOSED / OPEN / HALF_OPEN circuit breaker with real half-open recovery to temporarily halt AI calls if models are consistently failing.
 *   **Retry Mechanism**: Automatic retries with exponential backoff for AI API calls.
 *   **Health Check CLI**: A command-line tool to verify package configuration and component health.
 *   **Extensible**: Designed to be extended with custom PII rules, Jinja2 templates, and AI response handlers.
@@ -28,7 +28,13 @@ pip install -r requirements.txt
 # pip install ai_logging
 ```
 
-Ensure you have the necessary dependencies, especially if you plan to use specific LLMs (e.g., `openai`, `langchain`, `transformers`, `torch`). Key dependencies are listed in `requirements.txt`.
+Core dependencies are `pydantic`, `pydantic-settings`, and `Jinja2`. Optional extras (declared in `pyproject.toml`) add support for specific providers and metrics:
+
+```bash
+pip install ai_logging[openai]       # OpenAI provider
+pip install ai_logging[anthropic]    # Anthropic provider
+pip install ai_logging[prometheus]   # Prometheus metrics
+```
 
 ## Quick Start
 
@@ -110,11 +116,13 @@ Key environment variables (see `ai_logging/config/settings.py` for all options):
 *   `AI_LOGGING_BATCH_SIZE`: Number of log records to batch before sending to AI (default: `10`).
 *   `AI_LOGGING_FLUSH_INTERVAL_SECONDS`: Interval in seconds to flush logs even if batch size isn't met (default: `5.0`).
 *   `AI_LOGGING_MAX_RETRIES`: Max retries for AI API calls (default: `3`).
-*   `AI_LOGGING_GPT4_MODEL_NAME`: Model name for GPT-4 (default: `gpt-4`).
-*   `AI_LOGGING_GPT35_MODEL_NAME`: Model name for GPT-3.5 (default: `gpt-3.5-turbo`).
-*   `AI_LOGGING_GPT4_SEVERITY_THRESHOLD`: Log level at or above which GPT-4 is considered (e.g., `ERROR`).
-*   `AI_LOGGING_ENABLE_LOCAL_MODEL`: Set to `true` to enable local HuggingFace models (default: `false`).
-*   `AI_LOGGING_LOCAL_MODEL_NAME_OR_PATH`: Name or path for the local model (default: `distilgpt2`).
+*   `ANTHROPIC_API_KEY`: Your Anthropic API key (required for the Anthropic provider).
+*   `AI_LOGGING_PROVIDER`: Which provider to route to, `openai` or `anthropic` (default: `openai`).
+*   `AI_LOGGING_FAST_MODEL`: Model used for the fast tier (default: `gpt-4o-mini`).
+*   `AI_LOGGING_CAPABLE_MODEL`: Model used for the capable tier (default: `gpt-4o`).
+*   `AI_LOGGING_CAPABLE_SEVERITY_THRESHOLD`: Log level at or above which the capable tier is used (default: `ERROR`).
+*   `AI_LOGGING_CB_FAILURE_THRESHOLD`: Consecutive batch failures before the circuit breaker opens (default: `3`).
+*   `AI_LOGGING_CB_RESET_TIMEOUT_SECONDS`: Seconds the circuit breaker stays open before allowing a half-open trial request (default: `60.0`).
 *   `AI_LOGGING_JINJA_TEMPLATE_DIR`: Path to a directory containing custom Jinja2 prompt templates.
 *   `AI_LOGGING_JINJA_LOG_PROMPT_TEMPLATE_NAME`: Filename of the Jinja2 template to use for log prompts (default: `default_log_prompt.jinja2`).
 *   `AI_LOGGING_PII_RULES_JSON`: JSON string defining custom PII scrubbing rules.
@@ -130,7 +138,9 @@ Key environment variables (see `ai_logging/config/settings.py` for all options):
 *   **`get_async_logging_setup()` (in `ai_logging.handlers.queue_handler`)**: Sets up `QueueHandler` and `QueueListener` for asynchronous logging with downstream handlers (like `AIHandler`).
 *   **`JsonFormatter` (in `ai_logging.utils.json_formatter`)**: A `logging.Formatter` that outputs log records as JSON strings.
 *   **`scrub_pii_from_dict()` (in `ai_logging.utils.pii_filter`)**: Utility to scrub PII from dictionaries.
-*   **`LLMRouter` (in `ai_logging.router.llm_router`)**: Routes prompts to configured LLMs based on severity or other logic. (Uses LangChain components internally, currently with placeholders if LangChain isn't fully set up).
+*   **`LLMRouter` (in `ai_logging.router.llm_router`)**: Routes a prompt to a fast or capable provider based on the highest log severity in the batch, against a configurable threshold.
+*   **`LLMProvider` / `OpenAIProvider` / `AnthropicProvider` / `ProviderError` (in `ai_logging.providers`)**: The provider layer `LLMRouter` routes to. Each provider lazily imports its SDK and raises `ProviderError` with a `pip install ...` message if it's missing.
+*   **`CircuitBreaker` (in `ai_logging.utils.circuit_breaker`)**: CLOSED / OPEN / HALF_OPEN state machine that protects AI calls from repeatedly hitting a failing provider.
 *   **`Settings` / `get_settings()` (in `ai_logging.config.settings`)**: Pydantic-based configuration management.
 *   **Prometheus Metrics (in `ai_logging.metrics.prometheus`)**: Provides metrics via `get_metrics_instance()` and starts the server via `start_prometheus_server_if_enabled()`.
 
@@ -158,8 +168,6 @@ This will:
 
 ## Future Enhancements
 
-*   More sophisticated LangChain integration (e.g., `RouterChain`, specific chains for different log types).
-*   More robust circuit breaker logic (e.g., half-open state checks).
 *   Support for more LLM providers and local model types.
 *   Advanced PII detection rules and techniques.
 *   Callback mechanisms for AI responses.
