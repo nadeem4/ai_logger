@@ -49,12 +49,12 @@ def test_handler_integration_records_processed_counter():
     for i in range(3):
         h.emit(logging.LogRecord("t", logging.INFO, "f", 1, f"m{i}", None, None))
 
+    h.close()  # deterministic: close() drains and joins the worker
     assert len(h.llm_router.calls) == 1
     assert (
         registry.get_sample_value("ai_logging_handler_records_processed_total")
         == 3.0
     )
-    h.close()
 
 
 def test_noop_metrics_fallback_when_prometheus_client_unimportable(monkeypatch):

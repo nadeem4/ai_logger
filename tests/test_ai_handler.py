@@ -33,10 +33,10 @@ def test_batch_size_triggers_flush():
     h = make_handler(batch_size=3, flush_interval=60)
     for i in range(3):
         h.emit(logging.LogRecord("t", logging.INFO, "f", 1, f"m{i}", None, None))
+    h.close()  # deterministic: close() drains and joins the worker
     assert len(h.llm_router.calls) == 1
     prompt, records = h.llm_router.calls[0]
     assert len(records) == 3
-    h.close()
 
 def test_close_drains_buffer():
     h = make_handler(batch_size=100, flush_interval=60)
@@ -54,10 +54,10 @@ def test_router_exception_never_propagates_to_caller():
 def test_pii_scrubbed_before_prompt():
     h = make_handler(batch_size=1, flush_interval=60)
     h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "user bob@x.io logged in", None, None))
+    h.close()  # deterministic: close() drains and joins the worker
     prompt, records = h.llm_router.calls[0]
     assert "bob@x.io" not in prompt
     assert "[REDACTED_EMAIL]" in prompt
-    h.close()
 
 def test_retry_loop_single_failure_does_not_sleep():
     # Covers the brief's "verify a single failure doesn't sleep" requirement
@@ -71,20 +71,34 @@ def test_retry_loop_single_failure_does_not_sleep():
 
     router = BoomRouter()
     h = make_handler(llm_router=router, batch_size=1, flush_interval=60, max_retries=0)
+    h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "x", None, None))  # must not raise
+    # Processing (and any retry backoff sleep) now happens on the worker
+    # thread, not inside emit(), so time the drain-and-join in close()
+    # instead of emit() itself -- that's where the retry loop actually runs.
     start = time.time()
-    h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "x", None, None))  # must not raise, must not sleep
+    h.close()
     elapsed = time.time() - start
     assert router.call_count == 1, "max_retries=0 must mean exactly one attempt"
     assert elapsed < 0.5, f"a single failed attempt must not sleep (took {elapsed:.2f}s)"
-    h.close()
 
 
 def test_ai_response_callback_invoked_on_success():
     received = []
     h = make_handler(batch_size=1, flush_interval=60, ai_response_callback=received.append)
     h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "hi", None, None))
+    h.close()  # deterministic: close() drains and joins the worker
     assert received == ["ok"]
-    h.close()
+
+
+def test_emit_returns_fast_even_when_provider_is_slow():
+    import time
+    class SlowRouter:
+        def route_prompt(self, p, r): time.sleep(1.5); return "ok"
+    h = make_handler(llm_router=SlowRouter(), batch_size=1, flush_interval=60)
+    t0 = time.time()
+    h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None))
+    assert time.time() - t0 < 0.5, "emit blocked on the AI call"
+    h.close()  # close still waits for in-flight work
 
 
 def test_close_stops_flush_timer_permanently():

@@ -1,6 +1,7 @@
 import logging
 import time
 import threading
+import queue
 from typing import List, Dict, Any, Optional, Callable
 import jinja2
 import traceback
@@ -57,6 +58,14 @@ class AIHandler(logging.Handler):
         self._closed = False
         self._closed_lock = threading.Lock()
 
+        # Background worker: emit()/flush() only ever enqueue batches here.
+        # A single daemon thread drains the queue and calls _process_batch,
+        # so the AI call (and any retry backoff sleep) never runs on the
+        # caller's thread. Exactly one worker -- the circuit breaker's
+        # allow_request()/record_success()/record_failure() sequence in
+        # _process_batch is only safe with batches processed serially.
+        self._work_q: queue.Queue = queue.Queue()
+
         # Circuit breaker: protects the router call from repeatedly hammering
         # a failing LLM provider. See ai_logging/utils/circuit_breaker.py.
         self.circuit_breaker = CircuitBreaker(
@@ -100,9 +109,12 @@ class AIHandler(logging.Handler):
                 "{% endfor %}"
             )
 
-        # Start the periodic flush timer last, once the instance is fully
-        # constructed, so a short flush_interval can never fire the timer
-        # into a half-initialized object.
+        # Start the worker thread and the periodic flush timer last, once
+        # the instance is fully constructed, so a short flush_interval (or
+        # an immediate batch-size flush) can never run against a
+        # half-initialized object.
+        self._worker = threading.Thread(target=self._worker_loop, daemon=True)
+        self._worker.start()
         self._start_flush_timer()
 
     def _start_flush_timer(self) -> None:
@@ -242,18 +254,38 @@ class AIHandler(logging.Handler):
                 return
             records_to_process = self._buffer
             self._buffer = []
+        # put() happens outside _buffer_lock: it never blocks in practice
+        # (the queue is unbounded) but nothing that runs under
+        # _buffer_lock may re-enter -- this file has already been bitten
+        # twice by that class of deadlock.
         if records_to_process:
+            self._work_q.put(records_to_process)
+
+    def _worker_loop(self) -> None:
+        """Runs on the single background worker thread. Pulls one batch at
+        a time off the queue and processes it, so the AI call (and any
+        retry backoff sleep) never blocks the caller's thread. A None
+        sentinel, enqueued by close(), ends the loop.
+
+        Wrapped so a surprise exception can never kill this thread -- if it
+        died, every batch enqueued afterward would be silently dropped.
+        """
+        while True:
+            batch = self._work_q.get()
+            if batch is None:
+                return
             try:
-                self._process_batch(records_to_process)
+                self._process_batch(batch)
             except Exception:
                 # handleError(None) is unsafe: logging.Handler.handleError
                 # accesses record attributes and can itself raise when record
                 # is None. A router/processing failure must never escape the
-                # handler, so log it defensively instead.
+                # handler (nor kill the worker thread), so log it
+                # defensively instead.
                 try:
                     logging.getLogger(__name__).exception(
-                        "AIHandler failed to process a batch of %d record(s)",
-                        len(records_to_process),
+                        "AIHandler worker failed to process a batch of %d record(s)",
+                        len(batch),
                     )
                 except Exception:
                     pass
@@ -265,6 +297,13 @@ class AIHandler(logging.Handler):
                 self._flush_timer.cancel()
                 self._flush_timer = None
         self.flush()
+        self._work_q.put(None)
+        # Bounded join: an unbounded join on a wedged provider call would
+        # hang interpreter shutdown. Safe to call close() twice -- a
+        # second call finds the buffer empty (flush() is then a no-op) and
+        # joins a worker that is either already dead (returns immediately)
+        # or still draining the first sentinel's queue.
+        self._worker.join(self.flush_interval + 30)
         super().close()
 
 if __name__ == '__main__':
