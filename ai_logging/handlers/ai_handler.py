@@ -11,11 +11,6 @@ from ..utils.json_formatter import JsonFormatter
 from ..utils.pii_filter import scrub_pii_from_dict
 from ..metrics.prometheus import get_metrics_instance
 
-DEFAULT_BATCH_SIZE = 10
-DEFAULT_FLUSH_INTERVAL_SECONDS = 5.0
-DEFAULT_MAX_RETRIES = 3
-DEFAULT_RETRY_BACKOFF_FACTOR = 2
-
 class AIHandler(logging.Handler):
     """
     A logging handler that processes log records, batches them,
@@ -29,10 +24,10 @@ class AIHandler(logging.Handler):
 
     def __init__(self,
                  level: int = logging.NOTSET,
-                 batch_size: int = DEFAULT_BATCH_SIZE,
-                 flush_interval: float = DEFAULT_FLUSH_INTERVAL_SECONDS,
-                 max_retries: int = DEFAULT_MAX_RETRIES,
-                 retry_backoff_factor: float = DEFAULT_RETRY_BACKOFF_FACTOR,
+                 batch_size: Optional[int] = None,
+                 flush_interval: Optional[float] = None,
+                 max_retries: Optional[int] = None,
+                 retry_backoff_factor: Optional[float] = None,
                  settings=None,
                  llm_router=None,
                  pii_scrubber=None,
@@ -40,10 +35,10 @@ class AIHandler(logging.Handler):
                  ) -> None:
         super().__init__(level)
         self.settings = settings or get_settings()
-        self.batch_size = batch_size or self.settings.ai_logging_batch_size
-        self.flush_interval = flush_interval or self.settings.ai_logging_flush_interval_seconds
-        self.max_retries = max_retries or self.settings.ai_logging_max_retries
-        self.retry_backoff_factor = retry_backoff_factor or self.settings.ai_logging_retry_backoff_factor
+        self.batch_size = batch_size if batch_size is not None else self.settings.ai_logging_batch_size
+        self.flush_interval = flush_interval if flush_interval is not None else self.settings.ai_logging_flush_interval_seconds
+        self.max_retries = max_retries if max_retries is not None else self.settings.ai_logging_max_retries
+        self.retry_backoff_factor = retry_backoff_factor if retry_backoff_factor is not None else self.settings.ai_logging_retry_backoff_factor
 
         self.llm_router = llm_router or LLMRouter(self.settings)
         self.pii_scrubber = pii_scrubber or (lambda data: scrub_pii_from_dict(
@@ -58,7 +53,6 @@ class AIHandler(logging.Handler):
         self._last_flush_time = time.time()
 
         self._flush_timer: Optional[threading.Timer] = None
-        self._start_flush_timer()
 
         # Circuit breaker state
         self.circuit_breaker_state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
@@ -101,6 +95,11 @@ class AIHandler(logging.Handler):
                 "{% endfor %}"
             )
 
+        # Start the periodic flush timer last, once the instance is fully
+        # constructed, so a short flush_interval can never fire the timer
+        # into a half-initialized object.
+        self._start_flush_timer()
+
     def _start_flush_timer(self) -> None:
         if self._flush_timer:
 
@@ -115,11 +114,14 @@ class AIHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
+            should_flush = False
             with self._buffer_lock:
                 self._buffer.append(record)
                 self.metrics.ai_handler_records_processed_total.inc()
                 if len(self._buffer) >= self.batch_size:
-                    self.flush()
+                    should_flush = True
+            if should_flush:
+                self.flush()  # flush() checks the buffer under the lock itself
         except Exception:
             self.handleError(record)
 
@@ -161,6 +163,7 @@ class AIHandler(logging.Handler):
             return
 
         attempt = 0
+        succeeded = False
         while attempt <= self.max_retries:
             try:
                 start_time = time.time()
@@ -172,6 +175,7 @@ class AIHandler(logging.Handler):
                     self.circuit_breaker_state = "CLOSED"
                     self.circuit_breaker_fail_count = 0
                 self._handle_ai_response(ai_response)
+                succeeded = True
                 break
             except Exception as e:
                 self.metrics.ai_calls_total.inc(model_name="llm", status="error")
@@ -182,11 +186,14 @@ class AIHandler(logging.Handler):
                     self.circuit_breaker_open_until = time.time() + 60  # Open for 60 seconds
                     self.metrics.ai_circuit_breaker_state_changes_total.inc(model_name="llm", new_state="OPEN")
                     self.metrics.ai_circuit_breaker_currently_open.set(1, model_name="llm")
-                backoff = self.retry_backoff_factor * (2 ** attempt)
-                time.sleep(backoff)
+                # Only back off if another attempt is actually going to happen.
+                if attempt < self.max_retries:
+                    backoff = self.retry_backoff_factor * (2 ** attempt)
+                    time.sleep(backoff)
                 attempt += 1
-        else:
-            # All retries failed
+
+        if not succeeded:
+            # All retries failed (or max_retries == 0 and the single attempt failed).
             self.metrics.ai_circuit_breaker_state_changes_total.inc(model_name="llm", new_state="OPEN")
             self.metrics.ai_circuit_breaker_currently_open.set(1, model_name="llm")
 
@@ -222,8 +229,18 @@ class AIHandler(logging.Handler):
         if records_to_process:
             try:
                 self._process_batch(records_to_process)
-            except Exception as e:
-                self.handleError(None)
+            except Exception:
+                # handleError(None) is unsafe: logging.Handler.handleError
+                # accesses record attributes and can itself raise when record
+                # is None. A router/processing failure must never escape the
+                # handler, so log it defensively instead.
+                try:
+                    logging.getLogger(__name__).exception(
+                        "AIHandler failed to process a batch of %d record(s)",
+                        len(records_to_process),
+                    )
+                except Exception:
+                    pass
 
     def close(self) -> None:
         if self._flush_timer:
