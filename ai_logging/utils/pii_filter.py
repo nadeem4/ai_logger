@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Any, List, Union, Callable, Pattern
+from typing import Dict, Any, List, Union, Callable, Pattern, Optional
 
 # --- Default PII Scrubbing Rules ---
 # Each rule is a dictionary with 'name', 'regex', and 'replacement'
