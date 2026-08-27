@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     # --- AIHandler Retry & Circuit Breaker ---
     ai_logging_max_retries: int = Field(default=3, ge=0, validation_alias="AI_LOGGING_MAX_RETRIES")
     ai_logging_retry_backoff_factor: float = Field(default=2.0, ge=0, validation_alias="AI_LOGGING_RETRY_BACKOFF_FACTOR")
-    # TODO: Add circuit breaker specific settings (e.g., fail_threshold, reset_timeout)
+    ai_logging_cb_failure_threshold: int = Field(default=3, gt=0, validation_alias="AI_LOGGING_CB_FAILURE_THRESHOLD")
+    ai_logging_cb_reset_timeout_seconds: float = Field(default=60.0, gt=0, validation_alias="AI_LOGGING_CB_RESET_TIMEOUT_SECONDS")
 
     # --- LLM Provider & Model Configuration ---
     openai_api_key: Optional[str] = Field(default=None, validation_alias="OPENAI_API_KEY")

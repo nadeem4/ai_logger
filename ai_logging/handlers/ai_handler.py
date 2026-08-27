@@ -9,6 +9,7 @@ from ..config.settings import get_settings
 from ..router.llm_router import LLMRouter
 from ..utils.json_formatter import JsonFormatter
 from ..utils.pii_filter import scrub_pii_from_dict
+from ..utils.circuit_breaker import CircuitBreaker
 from ..metrics.prometheus import get_metrics_instance
 
 class AIHandler(logging.Handler):
@@ -56,10 +57,12 @@ class AIHandler(logging.Handler):
         self._closed = False
         self._closed_lock = threading.Lock()
 
-        # Circuit breaker state
-        self.circuit_breaker_state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
-        self.circuit_breaker_fail_count = 0
-        self.circuit_breaker_open_until = 0
+        # Circuit breaker: protects the router call from repeatedly hammering
+        # a failing LLM provider. See ai_logging/utils/circuit_breaker.py.
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=self.settings.ai_logging_cb_failure_threshold,
+            reset_timeout=self.settings.ai_logging_cb_reset_timeout_seconds,
+        )
 
         # Prometheus metrics
         self.metrics = get_metrics_instance()
@@ -166,7 +169,10 @@ class AIHandler(logging.Handler):
 
         prompt = self._build_prompt_with_jinja(processed_records)
 
-        if self.circuit_breaker_state == "OPEN" and time.time() < self.circuit_breaker_open_until:
+        # allow_request() has a side effect: if the breaker is OPEN and its
+        # reset timeout has elapsed, calling it transitions the breaker to
+        # HALF_OPEN (allowing this one trial call through) and returns True.
+        if not self.circuit_breaker.allow_request():
             self.metrics.ai_calls_total.labels(model="N/A", status="circuit_open").inc()
             return
 
@@ -179,31 +185,33 @@ class AIHandler(logging.Handler):
                 latency = time.time() - start_time
                 self.metrics.ai_calls_total.labels(model="llm", status="success").inc()
                 self.metrics.ai_call_latency_seconds.labels(model="llm").observe(latency)
-                if self.circuit_breaker_state == "HALF_OPEN":
-                    self.circuit_breaker_state = "CLOSED"
-                    self.circuit_breaker_fail_count = 0
                 self._handle_ai_response(ai_response)
                 succeeded = True
                 break
             except Exception as e:
                 self.metrics.ai_calls_total.labels(model="llm", status="error").inc()
                 self.metrics.ai_call_errors_total.labels(model="llm", error_type=type(e).__name__).inc()
-                self.circuit_breaker_fail_count += 1
-                if self.circuit_breaker_fail_count >= 3:
-                    self.circuit_breaker_state = "OPEN"
-                    self.circuit_breaker_open_until = time.time() + 60  # Open for 60 seconds
-                    self.metrics.ai_circuit_breaker_state_changes_total.labels(model="llm", new_state="OPEN").inc()
-                    self.metrics.ai_circuit_breaker_currently_open.labels(model="llm").set(1)
                 # Only back off if another attempt is actually going to happen.
                 if attempt < self.max_retries:
                     backoff = self.retry_backoff_factor * (2 ** attempt)
                     time.sleep(backoff)
                 attempt += 1
 
-        if not succeeded:
-            # All retries failed (or max_retries == 0 and the single attempt failed).
-            self.metrics.ai_circuit_breaker_state_changes_total.labels(model="llm", new_state="OPEN").inc()
-            self.metrics.ai_circuit_breaker_currently_open.labels(model="llm").set(1)
+        # Record the batch's outcome against the breaker once, after the
+        # retry loop is done -- not once per attempt. A batch that exhausts
+        # its retries is one failure from the breaker's point of view, so a
+        # single flaky batch can't trip a threshold-3 breaker by itself; the
+        # breaker instead tracks failures across consecutive *batches*.
+        state_before = self.circuit_breaker.state
+        if succeeded:
+            self.circuit_breaker.record_success()
+        else:
+            self.circuit_breaker.record_failure()
+        state_after = self.circuit_breaker.state
+
+        if state_after != state_before:
+            self.metrics.ai_circuit_breaker_state_changes_total.labels(model="llm", new_state=state_after).inc()
+            self.metrics.ai_circuit_breaker_currently_open.labels(model="llm").set(1 if state_after == "OPEN" else 0)
 
     def _build_prompt_with_jinja(self, records: List[Dict[str, Any]]) -> str:
         try:
