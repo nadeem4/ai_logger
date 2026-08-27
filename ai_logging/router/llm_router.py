@@ -6,14 +6,15 @@ from ..providers.base import LLMProvider
 
 logger = logging.getLogger(__name__)
 
-# Static defaults declared in settings.py for the OpenAI provider. If the
-# configured provider is anthropic and the user has not overridden these
-# settings (i.e. they still equal the OpenAI defaults), the router swaps in
-# the Anthropic tier defaults instead. Comparing against the known OpenAI
-# defaults is how we detect "not overridden" without adding provider-aware
-# fields to Settings.
-_DEFAULT_FAST_MODEL = "gpt-4o-mini"
-_DEFAULT_CAPABLE_MODEL = "gpt-4o"
+# Settings keeps ai_logging_fast_model / ai_logging_capable_model as static
+# OpenAI defaults ("gpt-4o-mini" / "gpt-4o") per the brief. When the
+# configured provider is anthropic, the router substitutes these Anthropic
+# tier defaults instead — but only for fields the user did not explicitly
+# set. We detect "explicitly set" via pydantic-settings' `model_fields_set`,
+# which records every field that was supplied (env var, .env, or
+# constructor kwarg) even when the supplied value equals the field default.
+# That is what lets us tell "user left it alone" apart from "user set it to
+# exactly gpt-4o-mini on purpose" — a literal-value comparison cannot.
 _ANTHROPIC_FAST_MODEL = "claude-3-5-haiku-latest"
 _ANTHROPIC_CAPABLE_MODEL = "claude-sonnet-4-5"
 
@@ -38,9 +39,11 @@ class LLMRouter:
 
         self.fast = fast
         self.capable = capable
-
-        if self.fast is None and self.capable is None:
-            self._warn_no_providers()
+        # Note: the "no providers available" warning is emitted lazily, the
+        # first time route_prompt() is called and finds nothing to route
+        # to — not here in __init__ — so a router that's constructed but
+        # never used stays silent, and "warn once" means once per instance
+        # regardless of how many route_prompt() calls follow.
 
     def _build_providers_from_settings(self):
         """Builds (fast, capable) providers from settings when the caller
@@ -54,11 +57,12 @@ class LLMRouter:
         if provider == "anthropic":
             if not self.settings.anthropic_api_key:
                 return None, None
-            # Settings keep the static OpenAI defaults; substitute the
-            # Anthropic tier defaults unless the user overrode them.
-            if fast_model == _DEFAULT_FAST_MODEL:
+            # Substitute the Anthropic tier defaults only for fields the
+            # user did not explicitly set (see module docstring above).
+            fields_set = self.settings.model_fields_set
+            if "ai_logging_fast_model" not in fields_set:
                 fast_model = _ANTHROPIC_FAST_MODEL
-            if capable_model == _DEFAULT_CAPABLE_MODEL:
+            if "ai_logging_capable_model" not in fields_set:
                 capable_model = _ANTHROPIC_CAPABLE_MODEL
             from ..providers.anthropic_provider import AnthropicProvider
 

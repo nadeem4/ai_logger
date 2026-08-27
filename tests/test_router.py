@@ -27,3 +27,52 @@ def test_provider_error_propagates_for_handler_retry():
     import pytest
     with pytest.raises(ProviderError):
         r.route_prompt("p", [{"levelno": logging.INFO}])
+
+
+# --- Fix round 1 regression coverage ---
+# These cover the settings-built path for the anthropic provider (the
+# override-detection fix using Settings.model_fields_set) and warn-once.
+# The autouse clean_settings fixture in conftest.py already deletes
+# OPENAI_API_KEY / ANTHROPIC_API_KEY and resets the settings singleton
+# before each test, so each test here sets only what it needs via
+# monkeypatch.setenv. Constructing an AnthropicProvider with no injected
+# client builds a real anthropic.Anthropic client object but makes no
+# network call — .complete() is never invoked on it below.
+
+def test_anthropic_defaults_used_when_not_overridden(monkeypatch):
+    from ai_logging.providers.anthropic_provider import AnthropicProvider
+    monkeypatch.setenv("AI_LOGGING_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    r = LLMRouter()
+
+    assert isinstance(r.fast, AnthropicProvider)
+    assert isinstance(r.capable, AnthropicProvider)
+    assert r.fast.model == "claude-3-5-haiku-latest"
+    assert r.capable.model == "claude-sonnet-4-5"
+
+
+def test_anthropic_explicit_fast_model_override_survives(monkeypatch):
+    # Regression guard for the "Important" review finding: a user on the
+    # anthropic provider who explicitly sets AI_LOGGING_FAST_MODEL to the
+    # literal string that also happens to be the OpenAI default must not
+    # have it silently overwritten with the Anthropic default.
+    monkeypatch.setenv("AI_LOGGING_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("AI_LOGGING_FAST_MODEL", "gpt-4o-mini")
+
+    r = LLMRouter()
+
+    assert r.fast.model == "gpt-4o-mini"
+    # capable was not overridden, so it still gets the anthropic default.
+    assert r.capable.model == "claude-sonnet-4-5"
+
+
+def test_warn_once_logs_single_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="ai_logging.router.llm_router"):
+        r = LLMRouter(fast=None, capable=None)
+        r.route_prompt("p", [{"levelno": logging.INFO}])
+        r.route_prompt("p", [{"levelno": logging.INFO}])
+
+    warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert len(warnings) == 1
