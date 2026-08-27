@@ -53,6 +53,8 @@ class AIHandler(logging.Handler):
         self._last_flush_time = time.time()
 
         self._flush_timer: Optional[threading.Timer] = None
+        self._closed = False
+        self._closed_lock = threading.Lock()
 
         # Circuit breaker state
         self.circuit_breaker_state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
@@ -101,12 +103,18 @@ class AIHandler(logging.Handler):
         self._start_flush_timer()
 
     def _start_flush_timer(self) -> None:
-        if self._flush_timer:
-
-            self._flush_timer.cancel()
-        self._flush_timer = threading.Timer(self.flush_interval, self._timed_flush)
-        self._flush_timer.daemon = True
-        self._flush_timer.start()
+        with self._closed_lock:
+            if self._closed:
+                # close() has already run (or is running concurrently and
+                # owns this same lock). Never re-arm a timer on a closed
+                # handler, even if a Timer thread is mid-flight here having
+                # raced past close()'s own cancel().
+                return
+            if self._flush_timer:
+                self._flush_timer.cancel()
+            self._flush_timer = threading.Timer(self.flush_interval, self._timed_flush)
+            self._flush_timer.daemon = True
+            self._flush_timer.start()
 
     def _timed_flush(self) -> None:
         self.flush()  # flush() checks the buffer under the lock itself
@@ -243,9 +251,11 @@ class AIHandler(logging.Handler):
                     pass
 
     def close(self) -> None:
-        if self._flush_timer:
-            self._flush_timer.cancel()
-            self._flush_timer = None
+        with self._closed_lock:
+            self._closed = True
+            if self._flush_timer:
+                self._flush_timer.cancel()
+                self._flush_timer = None
         self.flush()
         super().close()
 
