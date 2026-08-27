@@ -1,7 +1,8 @@
 import os
+import threading
 from typing import List, Optional, Dict, Any, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, validator, Json
+from pydantic import Field, field_validator, Json
 
 # --- Helper Functions (if any, e.g., for parsing complex env vars) ---
 
@@ -61,7 +62,8 @@ class Settings(BaseSettings):
     # --- LangChain Specific (if any beyond model names) ---
     # e.g., specific chain configurations, if not handled by LLMRouter internally
 
-    @validator("ai_logging_default_level", "ai_logging_gpt4_severity_threshold", "ai_logging_local_model_severity_threshold", pre=True, allow_reuse=True)
+    @field_validator("ai_logging_default_level", "ai_logging_gpt4_severity_threshold", "ai_logging_local_model_severity_threshold", mode="before")
+    @classmethod
     def validate_log_level_names(cls, value: str) -> str:
         """Validates that log level strings are valid."""
         if isinstance(value, str):
@@ -71,7 +73,8 @@ class Settings(BaseSettings):
             return upper_value
         raise ValueError(f"Log level name must be a string, got {type(value)}")
 
-    @validator("ai_logging_pii_rules_json", pre=True, allow_reuse=True)
+    @field_validator("ai_logging_pii_rules_json", mode="before")
+    @classmethod
     def parse_pii_rules_json_string(cls, value: Any) -> Any:
         """Allows PII rules to be passed as a JSON string that Pydantic can then parse."""
         if isinstance(value, str):
@@ -85,7 +88,7 @@ class Settings(BaseSettings):
 # --- Singleton Instance ---
 # This makes it easy to access settings from anywhere in the package.
 _settings_instance: Optional[Settings] = None
-_settings_lock = object() # Using a simple object for lock, could use threading.Lock if needed for complex init
+_settings_lock = threading.Lock()
 
 def get_settings() -> Settings:
     """
@@ -94,13 +97,15 @@ def get_settings() -> Settings:
     """
     global _settings_instance
     if _settings_instance is None:
-        # In a multithreaded context, a lock might be needed here for thread-safe singleton creation,
-        # though Python module imports are generally thread-safe. Pydantic's BaseSettings instantiation
-        # itself should be safe.
         with _settings_lock: # Basic lock to prevent re-entry if used in threads before instance is set
             if _settings_instance is None: # Double-check locking pattern
                  _settings_instance = Settings()
     return _settings_instance
+
+def reset_settings() -> None:
+    """Clear the cached Settings singleton (primarily for tests)."""
+    global _settings_instance
+    _settings_instance = None
 
 if __name__ == "__main__":
     # Example of how to use and test the settings
