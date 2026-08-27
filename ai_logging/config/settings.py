@@ -25,18 +25,14 @@ class Settings(BaseSettings):
     ai_logging_retry_backoff_factor: float = Field(default=2.0, ge=0, validation_alias="AI_LOGGING_RETRY_BACKOFF_FACTOR")
     # TODO: Add circuit breaker specific settings (e.g., fail_threshold, reset_timeout)
 
-    # --- OpenAI API & Model Configuration ---
+    # --- LLM Provider & Model Configuration ---
     openai_api_key: Optional[str] = Field(default=None, validation_alias="OPENAI_API_KEY")
-    ai_logging_gpt4_model_name: str = Field(default="gpt-4", validation_alias="AI_LOGGING_GPT4_MODEL_NAME")
-    ai_logging_gpt35_model_name: str = Field(default="gpt-3.5-turbo", validation_alias="AI_LOGGING_GPT35_MODEL_NAME")
-    # Example: Threshold for routing to more expensive model like GPT-4
-    ai_logging_gpt4_severity_threshold: str = Field(default="ERROR", validation_alias="AI_LOGGING_GPT4_SEVERITY_THRESHOLD") # e.g., ERROR, CRITICAL
-
-    # --- Local HuggingFace Model Configuration ---
-    ai_logging_enable_local_model: bool = Field(default=False, validation_alias="AI_LOGGING_ENABLE_LOCAL_MODEL")
-    ai_logging_local_model_name_or_path: str = Field(default="distilgpt2", validation_alias="AI_LOGGING_LOCAL_MODEL_NAME_OR_PATH")
-    # Example: Threshold for routing to local model (e.g., if OpenAI fails or for lower severity)
-    ai_logging_local_model_severity_threshold: str = Field(default="DEBUG", validation_alias="AI_LOGGING_LOCAL_MODEL_SEVERITY_THRESHOLD")
+    anthropic_api_key: Optional[str] = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    ai_logging_provider: str = Field(default="openai", validation_alias="AI_LOGGING_PROVIDER")  # openai|anthropic
+    ai_logging_fast_model: str = Field(default="gpt-4o-mini", validation_alias="AI_LOGGING_FAST_MODEL")
+    ai_logging_capable_model: str = Field(default="gpt-4o", validation_alias="AI_LOGGING_CAPABLE_MODEL")
+    # Threshold for routing to the capable (more expensive) model
+    ai_logging_capable_severity_threshold: str = Field(default="ERROR", validation_alias="AI_LOGGING_CAPABLE_SEVERITY_THRESHOLD")
 
     # --- Jinja2 Templating ---
     ai_logging_jinja_template_dir: Optional[str] = Field(default=None, validation_alias="AI_LOGGING_JINJA_TEMPLATE_DIR") # Path to custom templates
@@ -62,7 +58,7 @@ class Settings(BaseSettings):
     # --- LangChain Specific (if any beyond model names) ---
     # e.g., specific chain configurations, if not handled by LLMRouter internally
 
-    @field_validator("ai_logging_default_level", "ai_logging_gpt4_severity_threshold", "ai_logging_local_model_severity_threshold", mode="before")
+    @field_validator("ai_logging_default_level", "ai_logging_capable_severity_threshold", mode="before")
     @classmethod
     def validate_log_level_names(cls, value: str) -> str:
         """Validates that log level strings are valid."""
@@ -122,8 +118,9 @@ if __name__ == "__main__":
         print(f"Default Log Level: {settings.ai_logging_default_level}")
         print(f"OpenAI API Key: {'********' if settings.openai_api_key else 'Not set'}")
         print(f"Batch Size: {settings.ai_logging_batch_size}")
-        print(f"GPT-4 Model: {settings.ai_logging_gpt4_model_name}")
-        print(f"Enable Local Model: {settings.ai_logging_enable_local_model}")
+        print(f"Provider: {settings.ai_logging_provider}")
+        print(f"Fast Model: {settings.ai_logging_fast_model}")
+        print(f"Capable Model: {settings.ai_logging_capable_model}")
         print(f"Prometheus Enabled: {settings.ai_logging_prometheus_enabled}")
         print(f"Prometheus Port: {settings.ai_logging_prometheus_port}")
 
