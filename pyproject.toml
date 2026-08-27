@@ -1,7 +1,6 @@
 [build-system]
 requires = ["setuptools>=61.0"] # Minimum version of setuptools needed
 build-backend = "setuptools.build_meta"
-backend-path = ["."] # Specifies that setuptools.build_meta is in the current directory or importable
 
 [project]
 name = "ai_logging"
@@ -41,6 +40,17 @@ classifiers = [
 #   "prometheus-client>=0.19.0,<0.21.0",
 #   # "openai>=1.0.0,<2.0.0", # etc.
 # ]
+
+dependencies = [
+    "pydantic>=2.0.0,<3.0.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+    "Jinja2>=3.0.0,<4.0.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0.0"]
+anthropic = ["anthropic>=0.30.0"]
+prometheus = ["prometheus-client>=0.19.0"]
 
 [project.urls] # Optional
 "Homepage" = "https://github.com/yourusername/ai_logging" # Replace
