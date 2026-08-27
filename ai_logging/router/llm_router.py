@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from ..config.settings import Settings, get_settings
-from ..providers.base import LLMProvider
+from ..providers.base import LLMProvider, ProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,13 @@ class LLMRouter:
     def _build_providers_from_settings(self):
         """Builds (fast, capable) providers from settings when the caller
         did not inject either one. Returns (None, None) if the configured
-        provider's API key is not set."""
+        provider's API key is not set, or if the provider cannot be built
+        (e.g. its optional SDK is not installed).
+
+        A logging misconfiguration must never take down the host
+        application at startup, so a ProviderError here degrades to "no
+        providers" -- exactly like the missing-key path -- with a warning,
+        rather than propagating out of AIHandler.__init__()."""
         provider = self.settings.ai_logging_provider
 
         fast_model = self.settings.ai_logging_fast_model
@@ -64,20 +70,36 @@ class LLMRouter:
                 fast_model = _ANTHROPIC_FAST_MODEL
             if "ai_logging_capable_model" not in fields_set:
                 capable_model = _ANTHROPIC_CAPABLE_MODEL
-            from ..providers.anthropic_provider import AnthropicProvider
+            try:
+                from ..providers.anthropic_provider import AnthropicProvider
 
-            fast = AnthropicProvider(model=fast_model, api_key=self.settings.anthropic_api_key)
-            capable = AnthropicProvider(model=capable_model, api_key=self.settings.anthropic_api_key)
+                fast = AnthropicProvider(model=fast_model, api_key=self.settings.anthropic_api_key)
+                capable = AnthropicProvider(model=capable_model, api_key=self.settings.anthropic_api_key)
+            except ProviderError as e:
+                self._warn_provider_unavailable(provider, e)
+                return None, None
             return fast, capable
 
         # Default: openai
         if not self.settings.openai_api_key:
             return None, None
-        from ..providers.openai_provider import OpenAIProvider
+        try:
+            from ..providers.openai_provider import OpenAIProvider
 
-        fast = OpenAIProvider(model=fast_model, api_key=self.settings.openai_api_key)
-        capable = OpenAIProvider(model=capable_model, api_key=self.settings.openai_api_key)
+            fast = OpenAIProvider(model=fast_model, api_key=self.settings.openai_api_key)
+            capable = OpenAIProvider(model=capable_model, api_key=self.settings.openai_api_key)
+        except ProviderError as e:
+            self._warn_provider_unavailable(provider, e)
+            return None, None
         return fast, capable
+
+    def _warn_provider_unavailable(self, provider: str, error: Exception) -> None:
+        logger.warning(
+            "Could not build LLM provider '%s': %s. AI logging is disabled "
+            "(route_prompt() will return None).",
+            provider,
+            error,
+        )
 
     def _warn_no_providers(self) -> None:
         if not self._warned_no_providers:

@@ -90,7 +90,10 @@ class AIHandler(logging.Handler):
 
         self.jinja_env = jinja2.Environment(
             loader=loader,
-            autoescape=True,
+            # The rendered output is a plaintext prompt for an LLM, not
+            # HTML: escaping would mangle the JSON, SQL, XML and quoted
+            # strings that are the most valuable part of a log line.
+            autoescape=False,
             trim_blocks=True,
             lstrip_blocks=True
         )
@@ -109,7 +112,7 @@ class AIHandler(logging.Handler):
                 "Level: {{ log.levelname }}\n"
                 "Timestamp: {{ log.timestamp }}\n"
                 "Message: {{ log.message }}\n"
-                "{% if log.exception %}Exception: {{ log.exception }}{% endif %}\n"
+                "{% if log.exception_info %}Exception: {{ log.exception_info }}{% endif %}\n"
                 "---\n"
                 "{% endfor %}"
             )
@@ -195,11 +198,23 @@ class AIHandler(logging.Handler):
 
         attempt = 0
         succeeded = False
+        no_provider = False
         while attempt <= self.max_retries:
             try:
                 start_time = time.time()
                 ai_response = self.llm_router.route_prompt(prompt, processed_records)
                 latency = time.time() - start_time
+                if ai_response is None:
+                    # The router returns None when no provider is
+                    # configured: no AI call was made at all. Counting that
+                    # as a success (with its sub-millisecond "latency", a
+                    # breaker success and a callback invocation) would make
+                    # a dashboard report 100% healthy AI calls for a
+                    # deployment that is making none. Count it honestly and
+                    # leave the breaker and the callback alone.
+                    self.metrics.ai_calls_total.labels(model="llm", status="no_provider").inc()
+                    no_provider = True
+                    break
                 self.metrics.ai_calls_total.labels(model="llm", status="success").inc()
                 self.metrics.ai_call_latency_seconds.labels(model="llm").observe(latency)
                 self._handle_ai_response(ai_response)
@@ -213,6 +228,11 @@ class AIHandler(logging.Handler):
                     backoff = self.retry_backoff_factor * (2 ** attempt)
                     time.sleep(backoff)
                 attempt += 1
+
+        if no_provider:
+            # No AI call was attempted, so there is no outcome to record
+            # against the breaker in either direction.
+            return
 
         # Record the batch's outcome against the breaker once, after the
         # retry loop is done -- not once per attempt. A batch that exhausts
@@ -252,6 +272,33 @@ class AIHandler(logging.Handler):
         ai_response_logger.info(str(response))
 
     def flush(self) -> None:
+        """Public flush: drains the buffer to the worker unless close() has
+        already begun.
+
+        The _closed gate matters because close() enqueues a None sentinel
+        that stops the worker. A flush() that only checked
+        _worker.is_alive() would pass (the worker is still draining) and
+        put() its batch *behind* that sentinel, where the worker never
+        reaches it -- a silent loss, invisible even to the dead-worker
+        warning. Once _closed is set, the enqueue path is refused and the
+        batch takes the existing log-and-drop branch instead.
+
+        _closed is read under _closed_lock and the lock released before
+        anything else happens: no lock is ever held across put(), join()
+        or _process_batch.
+        """
+        with self._closed_lock:
+            closed = self._closed
+        self._drain_buffer_to_worker(enqueue_allowed=not closed)
+
+    def _drain_buffer_to_worker(self, enqueue_allowed: bool) -> None:
+        """Shared drain used by flush() and by close()'s own final flush.
+
+        close() sets _closed before it drains, so it calls this directly
+        with enqueue_allowed=True to bypass the gate flush() applies --
+        close() enqueues its last batch *before* the sentinel, so that
+        batch is genuinely processed.
+        """
         self._last_flush_time = time.time()
         records_to_process: List[logging.LogRecord] = []
         with self._buffer_lock:
@@ -269,7 +316,7 @@ class AIHandler(logging.Handler):
             # principle -- died) would sit there forever with nothing to
             # observe it: a silent, permanent loss. Gate on liveness and
             # log instead, once, rather than swallowing the batch.
-            if self._worker.is_alive():
+            if enqueue_allowed and self._worker.is_alive():
                 self._work_q.put(records_to_process)
             else:
                 self._log_worker_dead_once(len(records_to_process))
@@ -281,9 +328,10 @@ class AIHandler(logging.Handler):
             self._worker_dead_logged = True
         try:
             logging.getLogger(__name__).warning(
-                "AIHandler worker thread is no longer running; dropping a "
-                "batch of %d record(s) instead of enqueuing it (further "
-                "drops will not be logged individually)",
+                "AIHandler is closed or its worker thread is no longer "
+                "running; dropping a batch of %d record(s) instead of "
+                "enqueuing it (further drops will not be logged "
+                "individually)",
                 dropped_count,
             )
         except Exception:
@@ -334,22 +382,32 @@ class AIHandler(logging.Handler):
 
     def close(self) -> None:
         with self._closed_lock:
+            already_closed = self._closed
             self._closed = True
             if self._flush_timer:
                 self._flush_timer.cancel()
                 self._flush_timer = None
-        self.flush()
+        if already_closed:
+            # Second close() (logging.shutdown() calls close() on every
+            # handler at interpreter exit, on top of any explicit call).
+            # The worker was already stopped and joined by the first call;
+            # enqueuing a second sentinel would leave an item sitting in
+            # the queue that the drop backstop below would then report as
+            # lost work.
+            super().close()
+            return
+        # Bypass flush()'s _closed gate: _closed is already True, but
+        # close()'s own drain runs before the sentinel is enqueued, so its
+        # batch is still processed.
+        self._drain_buffer_to_worker(enqueue_allowed=True)
         self._work_q.put(None)
         # Bounded join: an unbounded join on a wedged provider call would
         # hang interpreter shutdown. Capped at 60s regardless of
         # flush_interval -- flush_interval + 30 could otherwise be an hour
         # for a handler configured with a large flush_interval, which
         # would block logging.shutdown() for that long. Safe to call
-        # close() twice -- a second call finds the buffer empty (flush()
-        # is then a no-op, or -- if the worker already died -- gated by
-        # the liveness check in flush() above) and joins a worker that is
-        # either already dead (returns immediately) or still draining the
-        # first sentinel's queue.
+        # close() twice -- a second call returns at the already_closed
+        # check above without re-enqueuing or re-joining.
         self._worker.join(min(self.flush_interval + 30, 60))
         if self._worker.is_alive():
             # join() timed out: the worker is wedged (almost certainly in
@@ -363,6 +421,21 @@ class AIHandler(logging.Handler):
                     "timeout; approximately %d batch(es) (plus any batch "
                     "currently being processed) may be left unprocessed",
                     self._work_q.qsize(),
+                )
+            except Exception:
+                pass
+        # Backstop: anything still queued after the join was never
+        # processed (a batch that raced the _closed gate, or work the
+        # wedged worker never reached). Make that loss visible instead of
+        # letting it disappear with the process.
+        leftover = self._work_q.qsize()
+        if leftover > 0:
+            try:
+                logging.getLogger(__name__).warning(
+                    "AIHandler closed with %d item(s) still queued; those "
+                    "record batches were dropped without being sent to the "
+                    "AI provider",
+                    leftover,
                 )
             except Exception:
                 pass

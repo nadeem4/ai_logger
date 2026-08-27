@@ -1,4 +1,4 @@
-import logging, threading, time
+import logging, queue, sys, threading, time
 from ai_logging.handlers.ai_handler import AIHandler
 
 class FakeRouter:
@@ -141,3 +141,216 @@ def test_close_stops_flush_timer_permanently():
     t.join(2)
     time.sleep(0.1)  # let any resurrected timer's start() call settle
     assert h._flush_timer is None, "no flush timer may survive close()"
+
+
+# --- Final review wave: regression coverage for the five merge blockers ---
+
+
+def test_exception_traceback_reaches_the_prompt():
+    # JsonFormatter emits the traceback under the key "exception_info".
+    # The packaged template used to test `log_entry.exception`, which is
+    # always undefined and therefore always falsy, so no traceback ever
+    # reached the model -- for exactly the ERROR-and-above batches that get
+    # routed to the expensive capable tier.
+    h = make_handler(batch_size=1, flush_interval=60)
+    assert h.jinja_template.name == "default_log_prompt.jinja2", "packaged template not loaded"
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "boom", None, sys.exc_info()))
+    h.close()
+    prompt, _ = h.llm_router.calls[0]
+    assert "ZeroDivisionError" in prompt, "exception type missing from the rendered prompt"
+    assert "Traceback" in prompt
+
+
+def test_exception_traceback_reaches_the_prompt_via_fallback_template():
+    # Same bug, second site: the inline fallback template used when the
+    # configured template cannot be found.
+    from ai_logging.config.settings import Settings
+
+    settings = Settings(ai_logging_jinja_log_prompt_template_name="definitely_not_there.jinja2")
+    h = AIHandler(settings=settings, llm_router=FakeRouter(), batch_size=1, flush_interval=60)
+    assert h.jinja_template.name is None, "expected the inline fallback template"
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "boom", None, sys.exc_info()))
+    h.close()
+    prompt, _ = h.llm_router.calls[0]
+    assert "ZeroDivisionError" in prompt, "exception type missing from the fallback-rendered prompt"
+
+
+def test_prompt_is_not_html_escaped():
+    # The prompt is plaintext for an LLM, not HTML: autoescape bought no
+    # safety and mangled exactly the payloads worth analysing.
+    message = "boom <tag> & 'quote' \"dq\""
+    h = make_handler(batch_size=1, flush_interval=60)
+    h.emit(logging.LogRecord("t", logging.INFO, "f", 1, message, None, None))
+    h.close()
+    prompt, _ = h.llm_router.calls[0]
+    assert message in prompt, f"message was mangled in the prompt: {prompt!r}"
+    assert "&lt;" not in prompt and "&amp;" not in prompt and "&#39;" not in prompt
+
+
+def test_none_router_response_is_not_reported_as_a_successful_call():
+    # route_prompt() returns None when no provider is configured. Counting
+    # that as a success made a key-less deployment report 100% healthy AI
+    # calls at sub-millisecond latency while making no calls at all.
+    from prometheus_client import CollectorRegistry
+
+    from ai_logging.metrics.prometheus import AILoggingMetrics
+
+    class NoProviderRouter:
+        def route_prompt(self, prompt, records):
+            return None
+
+    registry = CollectorRegistry()
+    received = []
+    h = AIHandler(
+        llm_router=NoProviderRouter(),
+        batch_size=1,
+        flush_interval=60,
+        ai_response_callback=received.append,
+    )
+    h.metrics = AILoggingMetrics(registry=registry)
+    h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None))
+    h.close()
+
+    assert received == [], "callback must not be invoked when no AI call was made"
+    assert (
+        registry.get_sample_value(
+            "ai_logging_ai_calls_total", {"model": "llm", "status": "success"}
+        )
+        is None
+    ), "a None response must not be counted as a successful AI call"
+    assert (
+        registry.get_sample_value(
+            "ai_logging_ai_calls_total", {"model": "llm", "status": "no_provider"}
+        )
+        == 1.0
+    )
+    assert (
+        registry.get_sample_value(
+            "ai_logging_ai_call_latency_seconds_count", {"model": "llm"}
+        )
+        is None
+    ), "no latency may be observed for a call that never happened"
+
+
+def test_handler_constructs_when_provider_sdk_is_missing(monkeypatch, caplog):
+    # A key in the environment plus no provider SDK installed (exactly what
+    # `pip install -r requirements.txt` produces) must degrade to "no
+    # providers" with a warning, not crash the host app at logger setup.
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setitem(sys.modules, "openai", None)
+
+    with caplog.at_level(logging.WARNING, logger="ai_logging.router.llm_router"):
+        h = AIHandler(batch_size=1, flush_interval=60)  # must not raise
+    try:
+        assert h.llm_router.fast is None and h.llm_router.capable is None
+        assert "openai SDK not installed" in caplog.text
+    finally:
+        h.close()
+
+
+def test_clean_shutdown_after_producers_finish_loses_no_records():
+    # Regression guard for the shutdown race: producers emit concurrently
+    # with a short flush timer, then close() runs once they are done.
+    # Every record must reach the router -- nothing may be dropped behind
+    # close()'s sentinel.
+    iterations, producers, per_producer = 200, 2, 5
+    for _ in range(iterations):
+        router = FakeRouter()
+        h = make_handler(llm_router=router, batch_size=3, flush_interval=0.002)
+
+        def produce():
+            for i in range(per_producer):
+                h.emit(logging.LogRecord("t", logging.INFO, "f", 1, f"m{i}", None, None))
+
+        threads = [threading.Thread(target=produce) for _ in range(producers)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        h.close()
+
+        received = sum(len(records) for _, records in router.calls)
+        assert received == producers * per_producer, (
+            f"clean shutdown lost {producers * per_producer - received} record(s)"
+        )
+
+
+def test_close_racing_live_emit_never_loses_records_silently(caplog):
+    # close() racing live producers: a flush() that passed the liveness
+    # check could enqueue *behind* close()'s sentinel, and the worker
+    # returned at the sentinel -- dropping everything after it with nothing
+    # logged at all. The loss window is the whole queue-drain duration, so
+    # the router below sleeps briefly per batch to keep the worker (alive,
+    # and draining) busy while the producers keep emitting.
+    #
+    # Every record must end up accounted for: processed by the router,
+    # still sitting in the buffer (emitted after close(), never flushed),
+    # or reported as dropped -- either through the log-and-drop branch
+    # (counted here via _log_worker_dead_once, which logs the first drop
+    # and warns that further drops are not logged individually) or through
+    # close()'s post-join "still queued" backstop. Anything else vanished
+    # silently, which is precisely the bug.
+    class SlowFakeRouter(FakeRouter):
+        def route_prompt(self, prompt, records):
+            time.sleep(0.004)
+            return super().route_prompt(prompt, records)
+
+    iterations, producers, per_producer = 15, 3, 50
+    for _ in range(iterations):
+        caplog.clear()
+        router = SlowFakeRouter()
+        h = make_handler(llm_router=router, batch_size=5, flush_interval=0.002)
+        started = threading.Event()
+
+        dropped = []
+        original_log_drop = h._log_worker_dead_once
+
+        def counting_log_drop(count, _orig=original_log_drop):
+            dropped.append(count)
+            _orig(count)
+
+        h._log_worker_dead_once = counting_log_drop
+
+        def produce():
+            for i in range(per_producer):
+                h.emit(logging.LogRecord("t", logging.INFO, "f", 1, f"m{i}", None, None))
+                if i >= 3:
+                    started.set()
+                time.sleep(0.0005)
+
+        threads = [threading.Thread(target=produce) for _ in range(producers)]
+        with caplog.at_level(logging.WARNING, logger="ai_logging.handlers.ai_handler"):
+            for t in threads:
+                t.start()
+            started.wait(2)
+            h.close()  # races the still-running producers
+            for t in threads:
+                t.join(5)
+
+        received = sum(len(records) for _, records in router.calls)
+        still_buffered = len(h._buffer)
+        left_in_queue = 0
+        while True:
+            try:
+                item = h._work_q.get_nowait()
+            except queue.Empty:
+                break
+            if item is not None:
+                left_in_queue += len(item)
+
+        total = producers * per_producer
+        assert received + still_buffered + sum(dropped) + left_in_queue == total, (
+            f"{total - received - still_buffered - sum(dropped) - left_in_queue} "
+            "record(s) vanished unaccounted for"
+        )
+        if left_in_queue:
+            assert "still queued" in caplog.text, (
+                f"{left_in_queue} record(s) were left queued at close() with "
+                "nothing logged"
+            )
