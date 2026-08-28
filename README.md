@@ -26,7 +26,7 @@ Logs handled by `AIHandler` are sent to a third-party AI provider (OpenAI or Ant
 
 - Don't attach `AIHandler` to loggers that handle regulated or highly sensitive data.
 - Write custom PII rules and/or sample your log volume before it reaches `AIHandler`.
-- Consider the `local` extra if you need analysis that never leaves the machine.
+- The `local` extra installs `transformers`/`torch` as dependencies, but as of this release there is no on-device `LLMProvider` implementation that uses them — only `openai` and `anthropic` call out to an external API today. Don't install `[local]` expecting analysis to stay on-device.
 
 Full detail — exactly what data leaves the machine, what scrubbing misses, how to write custom rules, and how to disable sending per-logger — is in **[docs/PRIVACY.md](docs/PRIVACY.md)**.
 
