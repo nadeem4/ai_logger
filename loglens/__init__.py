@@ -1,12 +1,12 @@
 # This file marks loglens as a package.
 
 # Expose key components for easier import
-from .logger import AILogger, get_ai_logger
+from .config import Settings, get_settings
 from .handlers import AIHandler, get_async_logging_setup
-from .utils import JsonFormatter, scrub_pii_from_dict
-from .config import get_settings, Settings
-from .router import LLMRouter
+from .logger import AILogger, get_ai_logger
 from .metrics import get_metrics_instance, start_prometheus_server_if_enabled
+from .router import LLMRouter
+from .utils import JsonFormatter, scrub_pii_from_dict
 
 __all__ = [
     "AILogger",
@@ -24,7 +24,8 @@ __all__ = [
 
 # Version of the loglens package, single-sourced from installed package metadata
 # (which reads it from pyproject.toml).
-from importlib.metadata import version as _pkg_version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 try:
     __version__ = _pkg_version("loglens")

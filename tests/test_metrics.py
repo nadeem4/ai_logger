@@ -1,11 +1,9 @@
 import logging
 import sys
 
-import pytest
-
 from loglens.config.settings import Settings
-from loglens.metrics.prometheus import AILoggingMetrics, _NoopMetric
 from loglens.handlers.ai_handler import AIHandler
+from loglens.metrics.prometheus import AILoggingMetrics, _NoopMetric
 
 
 class FakeRouter:

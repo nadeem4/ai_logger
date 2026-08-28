@@ -1,10 +1,21 @@
 import re
-from typing import Dict, Any, List, Union, Callable, Pattern, Optional
+from collections.abc import Mapping, Sequence
+from re import Pattern
+from typing import Any, Callable, Optional, Union
 
 # --- Default PII Scrubbing Rules ---
 # Each rule is a dictionary with 'name', 'regex', and 'replacement'
 # Users can extend or override these.
-DEFAULT_PII_RULES: List[Dict[str, Union[str, Pattern]]] = [
+#
+# `Mapping`/`Sequence` (rather than `dict`/`list`) are used below for
+# parameter types because they are covariant in their value/element type,
+# while `dict`/`list` are invariant. That lets callers pass narrower types --
+# e.g. Settings' parsed `list[dict[str, str]]` PII rules, which never carry a
+# Pattern or callable replacement -- without a spurious variance mismatch.
+RuleValue = Union[str, Pattern, Callable]
+Rule = Mapping[str, RuleValue]
+
+DEFAULT_PII_RULES: list[dict[str, RuleValue]] = [
     {
         "name": "email",
         "regex": re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
@@ -35,10 +46,10 @@ DEFAULT_PII_RULES: List[Dict[str, Union[str, Pattern]]] = [
 
 
 def compile_rules(
-    rules: List[Dict[str, Union[str, Pattern]]],
-) -> List[Dict[str, Union[str, Pattern, Callable[[str], str]]]]:
+    rules: Sequence[Rule],
+) -> list[Mapping[str, RuleValue]]:
     """Compiles regex strings in rules to re.Pattern objects if not already compiled."""
-    compiled_rules = []
+    compiled_rules: list[Mapping[str, RuleValue]] = []
     for rule in rules:
         if isinstance(rule["regex"], str):
             try:
@@ -53,7 +64,7 @@ def compile_rules(
     return compiled_rules
 
 
-def scrub_text(text: str, compiled_rules: List[Dict[str, Union[str, Pattern, Callable]]]) -> str:
+def scrub_text(text: str, compiled_rules: Sequence[Rule]) -> str:
     """
     Scrubs PII from a single string based on the provided compiled rules.
     """
@@ -73,11 +84,11 @@ def scrub_text(text: str, compiled_rules: List[Dict[str, Union[str, Pattern, Cal
 
 
 def scrub_pii_from_dict(
-    data: Dict[str, Any],
-    custom_rules: Optional[List[Dict[str, Union[str, Pattern]]]] = None,
+    data: dict[str, Any],
+    custom_rules: Optional[Sequence[Rule]] = None,
     use_default_rules: bool = True,
     max_depth: int = 10,  # Max recursion depth to prevent infinite loops
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Recursively scrubs PII from string values within a dictionary.
 
@@ -92,7 +103,7 @@ def scrub_pii_from_dict(
     Returns:
         A new dictionary with PII scrubbed from its string values.
     """
-    all_rules: List[Dict[str, Union[str, Pattern]]] = []
+    all_rules: list[Mapping[str, RuleValue]] = []
     if use_default_rules:
         all_rules.extend(DEFAULT_PII_RULES)
     if custom_rules:
@@ -155,7 +166,7 @@ if __name__ == "__main__":
     print(json.dumps(scrubbed_data_dict, indent=2))
 
     # Example with custom rules
-    custom_phone_rules = [
+    custom_phone_rules: list[dict[str, RuleValue]] = [
         {
             "name": "phone_number_simple",
             "regex": re.compile(
@@ -175,7 +186,7 @@ if __name__ == "__main__":
         ip_parts = match_obj.group(0).split(".")
         return f"{ip_parts[0]}.{ip_parts[1]}.[MASKED].[MASKED]"
 
-    custom_ip_rule = [
+    custom_ip_rule: list[dict[str, RuleValue]] = [
         {
             "name": "ipv4_custom_mask",
             "regex": re.compile(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"),  # Same regex as default IP

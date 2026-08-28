@@ -1,9 +1,5 @@
-import re
 from loglens.utils.pii_filter import (
     scrub_pii_from_dict,
-    scrub_text,
-    compile_rules,
-    DEFAULT_PII_RULES,
 )
 
 

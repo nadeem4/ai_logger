@@ -1,5 +1,6 @@
 import logging
 import threading
+import types
 from typing import Optional
 
 from ..config.settings import Settings, get_settings
@@ -37,9 +38,13 @@ class AILoggingMetrics:
     def __init__(self, settings: Optional[Settings] = None, registry=None):
         self.settings = settings or get_settings()
 
-        use_real_metrics = self.settings.loglens_prometheus_enabled
-        real_metrics_module = None
-        if use_real_metrics:
+        # Typed as Optional[ModuleType] (not left to infer as `None`) so that
+        # a successful `import ... as real_metrics_module` below is a valid
+        # rebind rather than a type conflict, and so the `is not None` check
+        # narrows it for the real-metrics branch instead of it statically
+        # remaining `None`.
+        real_metrics_module: Optional[types.ModuleType] = None
+        if self.settings.loglens_prometheus_enabled:
             try:
                 import prometheus_client as real_metrics_module
             except ImportError:
@@ -47,9 +52,8 @@ class AILoggingMetrics:
                     "prometheus_client not installed, but metrics are enabled in config. "
                     "Falling back to no-op metrics."
                 )
-                use_real_metrics = False
 
-        if use_real_metrics:
+        if real_metrics_module is not None:
             self.registry = (
                 registry if registry is not None else real_metrics_module.CollectorRegistry()
             )
@@ -187,7 +191,7 @@ def start_prometheus_server_if_enabled(settings: Optional[Settings] = None) -> N
             return
 
         try:
-            from prometheus_client import start_http_server, REGISTRY
+            from prometheus_client import REGISTRY, start_http_server
 
             metrics = get_metrics_instance()
             registry = metrics.registry if metrics.registry is not None else REGISTRY

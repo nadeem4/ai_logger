@@ -1,17 +1,17 @@
 import logging
-import time
-import threading
 import queue
-from typing import List, Dict, Any, Optional, Callable
+import threading
+import time
+from typing import Any, Callable, Optional
+
 import jinja2
-import traceback
 
 from ..config.settings import get_settings
+from ..metrics.prometheus import get_metrics_instance
 from ..router.llm_router import LLMRouter
+from ..utils.circuit_breaker import CircuitBreaker
 from ..utils.json_formatter import JsonFormatter
 from ..utils.pii_filter import scrub_pii_from_dict
-from ..utils.circuit_breaker import CircuitBreaker
-from ..metrics.prometheus import get_metrics_instance
 
 
 class AIHandler(logging.Handler):
@@ -64,7 +64,7 @@ class AIHandler(logging.Handler):
         )
         self.ai_response_callback = ai_response_callback or self._default_ai_response_logger
 
-        self._buffer: List[logging.LogRecord] = []
+        self._buffer: list[logging.LogRecord] = []
         self._buffer_lock = threading.Lock()
         self._last_flush_time = time.time()
 
@@ -96,6 +96,7 @@ class AIHandler(logging.Handler):
         self.metrics = get_metrics_instance()
 
         # Jinja2 environment and template
+        loader: jinja2.BaseLoader
         if self.settings.loglens_jinja_template_dir:
             loader = jinja2.FileSystemLoader(self.settings.loglens_jinja_template_dir)
         else:
@@ -172,7 +173,7 @@ class AIHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
-    def prepare_record_for_processing(self, record: logging.LogRecord) -> Dict[str, Any]:
+    def prepare_record_for_processing(self, record: logging.LogRecord) -> dict[str, Any]:
         if not self.formatter:
             self.formatter = JsonFormatter()
         json_str = self.formatter.format(record)
@@ -190,14 +191,14 @@ class AIHandler(logging.Handler):
             }
         return log_data
 
-    def _process_batch(self, batch: List[logging.LogRecord]) -> None:
+    def _process_batch(self, batch: list[logging.LogRecord]) -> None:
         if not batch:
             return
 
         self.metrics.ai_handler_batches_processed_total.inc()
         self.metrics.ai_handler_batch_size_records.observe(len(batch))
 
-        processed_records: List[Dict[str, Any]] = []
+        processed_records: list[dict[str, Any]] = []
         highest_severity = 0
         for record in batch:
             formatted_record = self.prepare_record_for_processing(record)
@@ -275,17 +276,17 @@ class AIHandler(logging.Handler):
                 1 if state_after == "OPEN" else 0
             )
 
-    def _build_prompt_with_jinja(self, records: List[Dict[str, Any]]) -> str:
+    def _build_prompt_with_jinja(self, records: list[dict[str, Any]]) -> str:
         try:
             return self.jinja_template.render(logs=records)
         except Exception as e:
             return f"Log Summary: {len(records)} entries. First message: {records[0]['message'] if records else 'N/A'} (Template error: {e})"
 
     def _handle_ai_response(self, response: Any) -> None:
-        if self.ai_response_callback:
-            self.ai_response_callback(response)
-        else:
-            self._default_ai_response_logger(response)
+        # __init__ always sets ai_response_callback (to the caller's
+        # callback, or to _default_ai_response_logger as a fallback), so it
+        # is never falsy here; there is no "else" branch to fall back to.
+        self.ai_response_callback(response)
 
     def _default_ai_response_logger(self, response: Any) -> None:
         ai_response_logger = logging.getLogger(self.settings.loglens_ai_response_log_logger_name)
@@ -325,7 +326,7 @@ class AIHandler(logging.Handler):
         batch is genuinely processed.
         """
         self._last_flush_time = time.time()
-        records_to_process: List[logging.LogRecord] = []
+        records_to_process: list[logging.LogRecord] = []
         with self._buffer_lock:
             if not self._buffer:
                 return

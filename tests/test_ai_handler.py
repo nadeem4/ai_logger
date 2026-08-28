@@ -1,4 +1,9 @@
-import logging, queue, sys, threading, time
+import logging
+import queue
+import sys
+import threading
+import time
+
 from loglens.handlers.ai_handler import AIHandler
 
 

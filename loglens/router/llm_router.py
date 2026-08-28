@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ..config.settings import Settings, get_settings
 from ..providers.base import LLMProvider, ProviderError
@@ -112,7 +112,7 @@ class LLMRouter:
             )
             self._warned_no_providers = True
 
-    def route_prompt(self, prompt: str, log_records: List[Dict[str, Any]]) -> Optional[str]:
+    def route_prompt(self, prompt: str, log_records: list[dict[str, Any]]) -> Optional[str]:
         """
         Routes a prompt to the capable or fast provider based on the highest
         severity in log_records, and returns the provider's response.
@@ -131,11 +131,22 @@ class LLMRouter:
 
         threshold = logging.getLevelName(self.settings.loglens_capable_severity_threshold.upper())
 
+        # `provider` is genuinely Optional here: the elif/else branches below
+        # negate an `and` (De Morgan's), so neither can prove self.capable
+        # or self.fast is non-None on its own -- only the guard at the top
+        # of this method (fast/capable not both None) guarantees a provider
+        # is found by the time we fall through to `else`. Expressed as an
+        # explicit None-check below rather than asserted away.
+        provider: Optional[LLMProvider]
         if highest_severity >= threshold and self.capable is not None:
             provider = self.capable
         elif self.fast is not None:
             provider = self.fast
         else:
             provider = self.capable
+
+        if provider is None:
+            self._warn_no_providers()
+            return None
 
         return provider.complete(prompt)

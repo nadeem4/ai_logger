@@ -1,4 +1,6 @@
-import json, logging
+import json
+import logging
+
 from loglens.utils.json_formatter import JsonFormatter
 
 

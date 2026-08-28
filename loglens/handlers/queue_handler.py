@@ -1,12 +1,11 @@
 import logging
 import logging.handlers
 import queue
-from typing import Tuple
 
 
 def get_async_logging_setup(
     *handlers: logging.Handler,
-) -> Tuple[logging.handlers.QueueHandler, logging.handlers.QueueListener]:
+) -> tuple[logging.handlers.QueueHandler, logging.handlers.QueueListener]:
     """
     Sets up asynchronous logging using a standard Python queue.
 

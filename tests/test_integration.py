@@ -1,4 +1,6 @@
-import logging, time
+import logging
+import time
+
 from loglens import AIHandler, get_async_logging_setup
 from loglens.router.llm_router import LLMRouter
 

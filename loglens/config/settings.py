@@ -1,8 +1,8 @@
-import os
 import threading
-from typing import List, Optional, Dict, Any, Union
+from typing import Any, Optional
+
+from pydantic import Field, Json, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator, Json
 
 # --- Helper Functions (if any, e.g., for parsing complex env vars) ---
 
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     # --- PII Scrubbing ---
     # Rules can be provided as a JSON string in an environment variable
     # Example: '[{"name": "custom_rule", "regex": "\\d+", "replacement": "[NUM]"}]'
-    loglens_pii_rules_json: Optional[Json[List[Dict[str, str]]]] = Field(
+    loglens_pii_rules_json: Optional[Json[list[dict[str, str]]]] = Field(
         default=None, validation_alias="LOGLENS_PII_RULES_JSON"
     )
     loglens_pii_use_default_rules: bool = Field(

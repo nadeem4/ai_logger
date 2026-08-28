@@ -1,8 +1,7 @@
-import logging
-import json
 import datetime
-import traceback
-from typing import Dict, Any, Optional
+import json
+import logging
+from typing import Any, Optional
 
 
 class JsonFormatter(logging.Formatter):
@@ -13,7 +12,7 @@ class JsonFormatter(logging.Formatter):
 
     def __init__(
         self,
-        fmt: Optional[Dict[str, str]] = None,
+        fmt: Optional[dict[str, str]] = None,
         datefmt: Optional[str] = None,
         style: str = "%",
         ensure_ascii: bool = False,
@@ -64,7 +63,7 @@ class JsonFormatter(logging.Formatter):
         """
         Formats the LogRecord instance into a JSON string.
         """
-        log_object: Dict[str, Any] = {}
+        log_object: dict[str, Any] = {}
 
         # Use asctime from record if available (e.g., if pre-formatted by another handler)
         # Otherwise, format it ourselves.
@@ -123,7 +122,7 @@ class JsonFormatter(logging.Formatter):
             "message",  # already handled
         ]
 
-        extra_data: Dict[str, Any] = {}
+        extra_data: dict[str, Any] = {}
         for key, value in record.__dict__.items():
             if key not in standard_attrs and not key.startswith("_"):
                 extra_data[key] = value

@@ -60,6 +60,11 @@ addopts = "-ra -q"
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+# ruff format's markdown support reformats fenced Python code blocks in-place;
+# exclude README.md from formatting only so its prose/examples stay untouched
+# (Task 1 constraint). Linting (`ruff check`) never applied to Markdown, so
+# this only affects `ruff format`.
+extend-exclude = ["README.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]

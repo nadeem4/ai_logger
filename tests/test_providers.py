@@ -1,8 +1,10 @@
 from unittest.mock import MagicMock
+
 import pytest
+
+from loglens.providers.anthropic_provider import AnthropicProvider
 from loglens.providers.base import ProviderError
 from loglens.providers.openai_provider import OpenAIProvider
-from loglens.providers.anthropic_provider import AnthropicProvider
 
 
 def test_openai_provider_calls_chat_completions():
@@ -26,7 +28,7 @@ def test_openai_errors_wrapped():
 
 
 def test_missing_sdk_raises_helpful_error(monkeypatch):
-    import builtins, sys
+    import sys
 
     monkeypatch.setitem(sys.modules, "openai", None)
     with pytest.raises(ProviderError, match="pip install"):
@@ -62,7 +64,7 @@ def test_anthropic_errors_wrapped():
 
 
 def test_anthropic_missing_sdk_raises_helpful_error(monkeypatch):
-    import builtins, sys
+    import sys
 
     monkeypatch.setitem(sys.modules, "anthropic", None)
     with pytest.raises(ProviderError, match="pip install anthropic"):

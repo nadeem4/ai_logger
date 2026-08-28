@@ -1,5 +1,5 @@
-import logging
 import argparse
+import logging
 
 # It's good practice for CLI tools not to configure the root logger directly
 # unless explicitly intended. Applications using the library might have their own setup.
@@ -25,7 +25,7 @@ def run_health_checks():
     # 1. Load Settings
     cli_logger.info("\n--- Checking Configuration Settings ---")
     try:
-        from loglens.config.settings import get_settings, Settings
+        from loglens.config.settings import get_settings
 
         settings = get_settings()
         cli_logger.info("Successfully loaded settings.")
@@ -91,6 +91,7 @@ def run_health_checks():
     cli_logger.info("\n--- Checking Jinja2 Template ---")
     try:
         import jinja2
+
         from loglens.handlers.ai_handler import AIHandler  # To access its template loading logic
 
         # Temporarily set AIHandler's logger to WARNING to avoid its info logs here
@@ -101,7 +102,7 @@ def run_health_checks():
         temp_ai_handler = AIHandler(settings=settings)  # Uses placeholder LLMs by default
 
         if isinstance(temp_ai_handler.jinja_template, jinja2.Template):
-            cli_logger.info(f"Successfully loaded/created Jinja2 template for AI prompts.")
+            cli_logger.info("Successfully loaded/created Jinja2 template for AI prompts.")
             # Check if it's the fallback or a loaded one
             if "Log Batch Summary" in temp_ai_handler.jinja_template.render(
                 logs=[]
@@ -115,7 +116,7 @@ def run_health_checks():
                         f"  Using a fallback Jinja2 template. Specified template '{settings.loglens_jinja_log_prompt_template_name}' might be missing or invalid."
                     )
                 else:
-                    cli_logger.info(f"  Using the default built-in Jinja2 template.")
+                    cli_logger.info("  Using the default built-in Jinja2 template.")
             else:
                 cli_logger.info(
                     f"  Successfully loaded custom/packaged Jinja2 template: {settings.loglens_jinja_log_prompt_template_name}"
@@ -134,10 +135,7 @@ def run_health_checks():
     cli_logger.info("\n--- Checking Prometheus Metrics Server ---")
     if settings.loglens_prometheus_enabled:
         try:
-            from loglens.metrics.prometheus import (
-                start_prometheus_server_if_enabled,
-                get_metrics_instance,
-            )
+            from loglens.metrics.prometheus import get_metrics_instance
 
             # Mute prometheus module's info logs for cleaner output
             logging.getLogger("loglens.metrics.prometheus").setLevel(logging.WARNING)

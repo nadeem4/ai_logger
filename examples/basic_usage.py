@@ -1,15 +1,13 @@
 import logging
-import time
 import os
+import time
 
 # Import components from the loglens package
 from loglens import (
-    get_ai_logger,
     AIHandler,
-    JsonFormatter,
     get_async_logging_setup,
-    start_prometheus_server_if_enabled,
     get_settings,
+    start_prometheus_server_if_enabled,
 )
 
 
@@ -115,7 +113,7 @@ def setup_basic_loglens():
         time.sleep(0.05)
 
     try:
-        x = 1 / 0
+        1 / 0
     except ZeroDivisionError:
         logger.error(
             "A division by zero error occurred!",
