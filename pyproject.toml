@@ -1,79 +1,70 @@
 [build-system]
-requires = ["setuptools>=61.0"] # Minimum version of setuptools needed
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai_logging"
-version = "0.1.0" # Keep this in sync with __init__.py and setup.py
-description = "Python logging toolkit with AI-powered analysis and intelligent routing."
+name = "loglens"
+version = "0.1.0"
+description = "AI-powered log analysis for Python logging: batch, scrub PII, and route logs to an LLM for insights."
 readme = "README.md"
-requires-python = ">=3.8"
-license = {text = "MIT License"} # Or e.g., {file = "LICENSE.txt"}
-authors = [
-    {name = "Nadeem Khan", email = "contact@example.com"}, # Replace with actual author details
-]
-keywords = ["logging", "ai", "llm", "gpt", "langchain", "monitoring", "pii", "prometheus"]
-
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Nadeem Khan", email = "nadeem4.nk13@gmail.com"}]
+keywords = ["logging", "ai", "llm", "observability", "pii", "prometheus", "openai", "anthropic"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Topic :: System :: Logging",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Operating System :: OS Independent",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Topic :: System :: Logging",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: OS Independent",
+  "Typing :: Typed",
 ]
-
-# Dependencies can be listed here as well, complementing or replacing install_requires in setup.py
-# For projects using only pyproject.toml for packaging, this is the primary place for dependencies.
-# Since we have setup.py and requirements.txt, we'll keep dependencies there for now
-# to maintain compatibility with older pip versions or workflows that rely on setup.py.
-# If you were to list them here:
-# dependencies = [
-#   "pydantic>=2.0.0,<3.0.0",
-#   "pydantic-settings>=2.0.0,<3.0.0",
-#   "Jinja2>=3.0.0,<4.0.0",
-#   "prometheus-client>=0.19.0,<0.21.0",
-#   # "openai>=1.0.0,<2.0.0", # etc.
-# ]
-
 dependencies = [
-    "pydantic>=2.0.0,<3.0.0",
-    "pydantic-settings>=2.0.0,<3.0.0",
-    "Jinja2>=3.0.0,<4.0.0",
+  "pydantic>=2.0,<3",
+  "pydantic-settings>=2.0,<3",
+  "Jinja2>=3.0,<4",
 ]
 
 [project.optional-dependencies]
-openai = ["openai>=1.0.0"]
-anthropic = ["anthropic>=0.30.0"]
-prometheus = ["prometheus-client>=0.19.0"]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.30"]
+metrics = ["prometheus-client>=0.19"]
+local = ["transformers>=4.30", "torch>=2.0"]
+all = ["loglens[openai,anthropic,metrics]"]
+dev = ["pytest>=8", "pytest-cov", "ruff", "mypy", "build", "loglens[all]"]
 
-[project.urls] # Optional
-"Homepage" = "https://github.com/yourusername/ai_logging" # Replace
-"Bug Reports" = "https://github.com/yourusername/ai_logging/issues" # Replace
-"Source Code" = "https://github.com/yourusername/ai_logging" # Replace
+[project.urls]
+Homepage = "https://github.com/nadeem4/loglens"
+Issues = "https://github.com/nadeem4/loglens/issues"
+Changelog = "https://github.com/nadeem4/loglens/blob/main/CHANGELOG.md"
 
-[project.scripts] # Defines console scripts
-ai-logging-health-check = "ai_logging.cli.health_check:main"
+[project.scripts]
+loglens-check = "loglens.cli.health_check:main"
 
-# --- Tool specific configurations (optional examples) ---
-# [tool.pytest.ini_options]
-# minversion = "6.0"
-# addopts = "-ra -q"
-# testpaths = [
-#     "tests",
-# ]
+[tool.setuptools.packages.find]
+include = ["loglens*"]
 
-# [tool.black]
-# line-length = 88
-# target-version = ['py38', 'py39', 'py310', 'py311']
+[tool.setuptools.package-data]
+loglens = ["templates/*.jinja2", "py.typed"]
 
-# [tool.ruff]
-# select = ["E", "F", "W", "I", "UP", "PL", "PT"] # Example rule set
-# ignore = ["E501"] # Example: ignore line too long if black handles it
-# line-length = 88
-# target-version = "py38"
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
