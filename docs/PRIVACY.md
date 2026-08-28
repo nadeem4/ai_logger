@@ -1,6 +1,6 @@
 # Privacy
 
-`loglens` sends log data to a third-party AI provider (OpenAI or Anthropic) so it can be
+`logscribe` sends log data to a third-party AI provider (OpenAI or Anthropic) so it can be
 analyzed. This document describes exactly what leaves your machine, when, where it goes,
 what the built-in PII scrubbing catches (and does not catch), how to extend it, how to
 turn it off for specific loggers, and what governs the data once it reaches a provider.
@@ -9,10 +9,10 @@ If you only read one section, read [What scrubbing does *not* catch](#what-scrub
 
 ## What data leaves the machine
 
-`AIHandler` (`loglens/handlers/ai_handler.py`) formats every buffered `logging.LogRecord`
-into a dict via `JsonFormatter` (`loglens/utils/json_formatter.py`), runs that dict through
+`AIHandler` (`logscribe/handlers/ai_handler.py`) formats every buffered `logging.LogRecord`
+into a dict via `JsonFormatter` (`logscribe/utils/json_formatter.py`), runs that dict through
 PII scrubbing, then renders the *scrubbed* batch into a plaintext prompt with Jinja2
-(`loglens/templates/default_log_prompt.jinja2`) and passes that prompt as the single
+(`logscribe/templates/default_log_prompt.jinja2`) and passes that prompt as the single
 message content to the configured provider's chat/completion API.
 
 The formatted (pre-scrub) dict for each record includes:
@@ -32,13 +32,13 @@ default prompt template only renders `timestamp`, `levelname`, `name`, `message`
 `pathname`/`lineno`/`funcName`, `exception_info`, `stack_info`, and `extras` (as JSON) into
 the outgoing text. `levelno`, `filename`, `module`, `thread`/`threadName`, and
 `process`/`processName` are computed and scrubbed but not included in the default prompt —
-though a custom template (`LOGLENS_JINJA_TEMPLATE_DIR`) could add them.
+though a custom template (`LOGSCRIBE_JINJA_TEMPLATE_DIR`) could add them.
 
-**When:** a batch is sent when it reaches `LOGLENS_BATCH_SIZE` records, or every
-`LOGLENS_FLUSH_INTERVAL_SECONDS` (whichever comes first), or on handler shutdown
+**When:** a batch is sent when it reaches `LOGSCRIBE_BATCH_SIZE` records, or every
+`LOGSCRIBE_FLUSH_INTERVAL_SECONDS` (whichever comes first), or on handler shutdown
 (`close()` / interpreter exit via `logging.shutdown()`).
 
-**Where:** to whichever provider `LOGLENS_PROVIDER` selects (`openai` or `anthropic`),
+**Where:** to whichever provider `LOGSCRIBE_PROVIDER` selects (`openai` or `anthropic`),
 using that provider's official SDK with its default endpoint. There is currently no
 self-hosted or on-device option (see [When to avoid sending anything](#when-to-avoid-sending-anything-at-all)).
 
@@ -46,8 +46,8 @@ self-hosted or on-device option (see [When to avoid sending anything](#when-to-a
 
 PII scrubbing runs on every string value in the formatted record dict (recursively, through
 nested dicts/lists in `extras`) before the prompt is built. It is **on by default**
-(`LOGLENS_PII_USE_DEFAULT_RULES=true`) and applies these rules
-(`loglens/utils/pii_filter.py`, `DEFAULT_PII_RULES`):
+(`LOGSCRIBE_PII_USE_DEFAULT_RULES=true`) and applies these rules
+(`logscribe/utils/pii_filter.py`, `DEFAULT_PII_RULES`):
 
 | Rule | Pattern (informal) | Example input | Example output |
 |---|---|---|---|
@@ -80,11 +80,11 @@ provider **unmodified**. In particular, it does **not** catch:
   default rule either (the source even flags this: *"Add more rules as needed (e.g., phone
   numbers, SSNs — be careful with SSN regex accuracy)"*).
 - **A custom rule with a bad regex is silently dropped — not enforced, not logged, not
-  raised.** `compile_rules()` (`loglens/utils/pii_filter.py`) catches `re.error` on a bad
+  raised.** `compile_rules()` (`logscribe/utils/pii_filter.py`) catches `re.error` on a bad
   pattern and skips that rule with a bare `print()` to stdout — not a log record, not a
   warning, not an exception. In a container, systemd unit, or anywhere else stdout isn't
   watched, that message is lost and the rule is silently absent. Confirmed: setting
-  `LOGLENS_PII_RULES_JSON='[{"name": "employee_id", "regex": "EMP-[0-9{5}", "replacement":
+  `LOGSCRIBE_PII_RULES_JSON='[{"name": "employee_id", "regex": "EMP-[0-9{5}", "replacement":
   "[REDACTED]"}]'` (an unbalanced `{` — a typo easy to make by hand) compiles nothing, and
   `logger.warning("Escalated by EMP-40231")` reaches the prompt with `EMP-40231` sent
   unredacted, with no error anywhere in the running process. Always verify a new rule
@@ -103,8 +103,8 @@ reaches `AIHandler`, or don't attach `AIHandler` to that logger at all.
 ## How to add custom rules
 
 Custom rules are applied *in addition to* the default rules (unless you disable the
-defaults with `LOGLENS_PII_USE_DEFAULT_RULES=false`). The simplest path is the
-`LOGLENS_PII_RULES_JSON` environment variable, which `Settings` parses as a JSON array of
+defaults with `LOGSCRIBE_PII_USE_DEFAULT_RULES=false`). The simplest path is the
+`LOGSCRIBE_PII_RULES_JSON` environment variable, which `Settings` parses as a JSON array of
 rule objects:
 
 ```jsonc
@@ -121,21 +121,21 @@ rule objects:
 Worked example — redacting an internal employee-ID format like `EMP-12345`:
 
 ```bash
-export LOGLENS_PII_RULES_JSON='[{"name": "employee_id", "regex": "EMP-\\d{5}", "replacement": "[REDACTED_EMPLOYEE_ID]"}]'
+export LOGSCRIBE_PII_RULES_JSON='[{"name": "employee_id", "regex": "EMP-\\d{5}", "replacement": "[REDACTED_EMPLOYEE_ID]"}]'
 ```
 
 With that set, `logger.warning("Escalated by EMP-40231")` becomes `"Escalated by
 [REDACTED_EMPLOYEE_ID]"` in the scrubbed record before it's ever rendered into a prompt.
 
-Because `LOGLENS_PII_RULES_JSON` is parsed as `list[dict[str, str]]`, every field must be a
+Because `LOGSCRIBE_PII_RULES_JSON` is parsed as `list[dict[str, str]]`, every field must be a
 plain string — you cannot pass a pre-compiled `re.Pattern` or a callable replacement through
 the environment variable. If you construct `AIHandler` in code rather than purely through
 environment configuration, you can pass richer rules (a compiled `Pattern`, or a callable
 replacement function) directly:
 
 ```python
-from loglens import AIHandler
-from loglens.utils.pii_filter import scrub_pii_from_dict
+from logscribe import AIHandler
+from logscribe.utils.pii_filter import scrub_pii_from_dict
 
 custom_rules = [{"name": "employee_id", "regex": r"EMP-\d{5}", "replacement": "[REDACTED_EMPLOYEE_ID]"}]
 
@@ -147,13 +147,13 @@ handler = AIHandler(
 **Verify your rule actually compiled before trusting it.** As covered above, a rule with an
 invalid regex is silently dropped rather than rejected — `logger.warning(...)` and everything
 after it will keep running as if the rule were never written. Test it directly:
-`loglens.utils.pii_filter.compile_rules([your_rule])` returns a list with your rule in it
+`logscribe.utils.pii_filter.compile_rules([your_rule])` returns a list with your rule in it
 (compiled) or, on a bad pattern, a shorter list plus a `print()` to stdout — check the
 returned list's length, don't rely on watching for that message.
 
 ## How to disable sending entirely, per logger
 
-`loglens` is opt-in: a logger only reaches `AIHandler` if a handler chain leads to it, so
+`logscribe` is opt-in: a logger only reaches `AIHandler` if a handler chain leads to it, so
 the most direct way to exclude a logger is to **never attach `AIHandler` (or a
 `QueueHandler` that feeds one) to it** in the first place.
 
@@ -195,21 +195,21 @@ options without restructuring your handler setup:
 
 If no log from your application should ever leave the machine, don't attach `AIHandler`
 anywhere, or scope its use to a dedicated, clearly-named logger that only receives
-messages you have already reviewed. The `local` extra (`pip install "loglens[local]"`,
+messages you have already reviewed. The `local` extra (`pip install "logscribe[local]"`,
 `transformers` + `torch`) is declared in `pyproject.toml` for on-device analysis, but at
 the time of writing it adds no on-device provider implementation — there is no
-`LLMProvider` in `loglens/providers/` that runs a local model. Installing `[local]` alone
+`LLMProvider` in `logscribe/providers/` that runs a local model. Installing `[local]` alone
 does not currently keep data on-device; the only providers implemented are `OpenAIProvider`
 and `AnthropicProvider`, both of which call an external API.
 
 ## Data retention
 
 Once a batch is sent, its retention is governed by the provider's own policies, not by
-`loglens` — the package does not control or track what happens to data after
+`logscribe` — the package does not control or track what happens to data after
 `provider.complete()` returns:
 
 - OpenAI: <https://openai.com/policies/api-data-usage-policies/>
 - Anthropic: <https://www.anthropic.com/legal/privacy>
 
-Review the policy for whichever provider you configure via `LOGLENS_PROVIDER` before
+Review the policy for whichever provider you configure via `LOGSCRIBE_PROVIDER` before
 sending anything you wouldn't want retained under that provider's terms.

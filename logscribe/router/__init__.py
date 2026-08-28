@@ -1,4 +1,4 @@
-# This file marks loglens.router as a sub-package.
+# This file marks logscribe.router as a sub-package.
 
 from .llm_router import LLMRouter
 

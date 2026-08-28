@@ -7,7 +7,7 @@ class _OpenAIClientLike(Protocol):
     """Structural type for the piece of the openai SDK client we actually
     use. Declared here (rather than importing `openai.OpenAI` for the
     annotation) so the SDK stays a lazy, function-scoped import -- `import
-    loglens` must succeed without `openai` installed. `chat` is typed `Any`
+    logscribe` must succeed without `openai` installed. `chat` is typed `Any`
     deliberately: the full response shape isn't our concern to model, and
     doing so accurately would require importing the real SDK types anyway.
     """

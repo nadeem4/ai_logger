@@ -8,22 +8,22 @@ from typing import TextIO
 # It's good practice for CLI tools not to configure the root logger directly
 # unless explicitly intended. Applications using the library might have their own setup.
 # However, for a health check, some minimal output is needed.
-cli_logger = logging.getLogger("loglens_health_check")
+cli_logger = logging.getLogger("logscribe_health_check")
 handler = logging.StreamHandler()  # defaults to sys.stderr -- keeps stdout clean for --json
 formatter = logging.Formatter("[%(levelname)s] %(name)s: %(message)s")
 handler.setFormatter(formatter)
 cli_logger.addHandler(handler)
 cli_logger.setLevel(logging.INFO)  # Default level for health check output
 
-# Adjust loglens package loggers if too verbose during health check
-logging.getLogger("loglens").setLevel(logging.WARNING)
+# Adjust logscribe package loggers if too verbose during health check
+logging.getLogger("logscribe").setLevel(logging.WARNING)
 
 
 @dataclass
 class HealthStatus:
     """Structured per-check health state, consumed by both the --json
     output and the human ✅/❌ summary. Field names and provider/metrics
-    string values match the documented `loglens-check --json` contract
+    string values match the documented `logscribe-check --json` contract
     exactly -- this dataclass IS that contract."""
 
     settings_ok: bool = False
@@ -75,7 +75,7 @@ def _check_provider_state(provider_name: str, api_key: str | None) -> str:
 
 def run_health_checks(status: HealthStatus | None = None) -> bool:
     """
-    Performs a series of health checks on the loglens package configuration and components.
+    Performs a series of health checks on the logscribe package configuration and components.
 
     If `status` is given, the fine-grained per-check state (settings_ok,
     providers, template_ok, metrics) is recorded onto it as a side effect --
@@ -92,25 +92,25 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
     # 1. Load Settings
     cli_logger.info("\n--- Checking Configuration Settings ---")
     try:
-        from loglens.config.settings import get_settings
+        from logscribe.config.settings import get_settings
 
         settings = get_settings()
         status.settings_ok = True
         cli_logger.info("Successfully loaded settings.")
         # Print a few key settings for verification
-        cli_logger.info(f"  Default Log Level: {settings.loglens_default_level}")
-        cli_logger.info(f"  Batch Size: {settings.loglens_batch_size}")
-        cli_logger.info(f"  Provider: {settings.loglens_provider}")
-        cli_logger.info(f"  Fast Model: {settings.loglens_fast_model}")
-        cli_logger.info(f"  Capable Model: {settings.loglens_capable_model}")
+        cli_logger.info(f"  Default Log Level: {settings.logscribe_default_level}")
+        cli_logger.info(f"  Batch Size: {settings.logscribe_batch_size}")
+        cli_logger.info(f"  Provider: {settings.logscribe_provider}")
+        cli_logger.info(f"  Fast Model: {settings.logscribe_fast_model}")
+        cli_logger.info(f"  Capable Model: {settings.logscribe_capable_model}")
         cli_logger.info(
-            f"  Capable Severity Threshold: {settings.loglens_capable_severity_threshold}"
+            f"  Capable Severity Threshold: {settings.logscribe_capable_severity_threshold}"
         )
         cli_logger.info(f"  OpenAI API Key Set: {'Yes' if settings.openai_api_key else 'No'}")
         cli_logger.info(f"  Anthropic API Key Set: {'Yes' if settings.anthropic_api_key else 'No'}")
-        cli_logger.info(f"  Prometheus Enabled: {settings.loglens_prometheus_enabled}")
-        if settings.loglens_prometheus_enabled:
-            cli_logger.info(f"  Prometheus Port: {settings.loglens_prometheus_port}")
+        cli_logger.info(f"  Prometheus Enabled: {settings.logscribe_prometheus_enabled}")
+        if settings.logscribe_prometheus_enabled:
+            cli_logger.info(f"  Prometheus Port: {settings.logscribe_prometheus_port}")
 
     except Exception as e:
         cli_logger.error(f"Failed to load settings: {e}")
@@ -122,7 +122,7 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
         return False
 
     # Independently record per-provider state (ok/no_key/sdk_missing) for
-    # BOTH providers, regardless of which one settings.loglens_provider
+    # BOTH providers, regardless of which one settings.logscribe_provider
     # selects -- this is diagnostic info the LLMRouter check below does not
     # surface on its own, since the router only builds the configured
     # provider.
@@ -132,19 +132,19 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
     # 2. Check LLM Router and Model Availability
     cli_logger.info("\n--- Checking LLM Router & Models ---")
     try:
-        from loglens.router.llm_router import LLMRouter
+        from logscribe.router.llm_router import LLMRouter
 
         # Mute internal LLMRouter info logs for cleaner health check output
-        logging.getLogger("loglens.router.llm_router").setLevel(logging.WARNING)
+        logging.getLogger("logscribe.router.llm_router").setLevel(logging.WARNING)
 
         router = LLMRouter(settings=settings)
         cli_logger.info("LLMRouter initialized.")
 
-        cli_logger.info(f"  Configured provider: {settings.loglens_provider}")
-        cli_logger.info(f"  Fast model: {settings.loglens_fast_model}")
-        cli_logger.info(f"  Capable model: {settings.loglens_capable_model}")
+        cli_logger.info(f"  Configured provider: {settings.logscribe_provider}")
+        cli_logger.info(f"  Fast model: {settings.logscribe_fast_model}")
+        cli_logger.info(f"  Capable model: {settings.logscribe_capable_model}")
         cli_logger.info(
-            f"  Capable severity threshold: {settings.loglens_capable_severity_threshold}"
+            f"  Capable severity threshold: {settings.logscribe_capable_severity_threshold}"
         )
 
         if router.fast is not None or router.capable is not None:
@@ -152,7 +152,7 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
         else:
             key_name = (
                 "ANTHROPIC_API_KEY"
-                if settings.loglens_provider == "anthropic"
+                if settings.logscribe_provider == "anthropic"
                 else "OPENAI_API_KEY"
             )
             cli_logger.warning(
@@ -170,10 +170,10 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
     try:
         import jinja2
 
-        from loglens.handlers.ai_handler import AIHandler  # To access its template loading logic
+        from logscribe.handlers.ai_handler import AIHandler  # To access its template loading logic
 
         # Temporarily set AIHandler's logger to WARNING to avoid its info logs here
-        logging.getLogger("loglens.handlers.ai_handler").setLevel(logging.WARNING)
+        logging.getLogger("logscribe.handlers.ai_handler").setLevel(logging.WARNING)
 
         # We need an AIHandler instance to check its template
         # This is a bit indirect but tests the same logic AIHandler uses.
@@ -187,18 +187,18 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
                 logs=[]
             ):  # Crude check for fallback
                 if (
-                    settings.loglens_jinja_template_dir
-                    or settings.loglens_jinja_log_prompt_template_name
+                    settings.logscribe_jinja_template_dir
+                    or settings.logscribe_jinja_log_prompt_template_name
                     != "default_log_prompt.jinja2"
                 ):
                     cli_logger.warning(
-                        f"  Using a fallback Jinja2 template. Specified template '{settings.loglens_jinja_log_prompt_template_name}' might be missing or invalid."
+                        f"  Using a fallback Jinja2 template. Specified template '{settings.logscribe_jinja_log_prompt_template_name}' might be missing or invalid."
                     )
                 else:
                     cli_logger.info("  Using the default built-in Jinja2 template.")
             else:
                 cli_logger.info(
-                    f"  Successfully loaded custom/packaged Jinja2 template: {settings.loglens_jinja_log_prompt_template_name}"
+                    f"  Successfully loaded custom/packaged Jinja2 template: {settings.logscribe_jinja_log_prompt_template_name}"
                 )
         else:
             cli_logger.error(
@@ -212,12 +212,12 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
 
     # 4. Check Prometheus Metrics Server (if enabled)
     cli_logger.info("\n--- Checking Prometheus Metrics Server ---")
-    if settings.loglens_prometheus_enabled:
+    if settings.logscribe_prometheus_enabled:
         try:
-            from loglens.metrics.prometheus import get_metrics_instance
+            from logscribe.metrics.prometheus import get_metrics_instance
 
             # Mute prometheus module's info logs for cleaner output
-            logging.getLogger("loglens.metrics.prometheus").setLevel(logging.WARNING)
+            logging.getLogger("logscribe.metrics.prometheus").setLevel(logging.WARNING)
 
             # Check if prometheus_client is installed
             import prometheus_client  # type: ignore
@@ -247,7 +247,7 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
                     )
 
             cli_logger.info(
-                f"  Prometheus is configured to run on port {settings.loglens_prometheus_port}."
+                f"  Prometheus is configured to run on port {settings.logscribe_prometheus_port}."
             )
             cli_logger.info(
                 "  Note: This check does not guarantee the server can start (e.g., port might be in use)."

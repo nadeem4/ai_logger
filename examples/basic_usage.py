@@ -1,4 +1,4 @@
-"""Minimal, runnable loglens quickstart.
+"""Minimal, runnable logscribe quickstart.
 
 Attaches AIHandler to a logger via the async queue setup (see README's
 Quickstart), logs a few messages -- including one that trips the default
@@ -7,7 +7,7 @@ worker to flush and call the LLM, then shuts everything down cleanly.
 
 Run:
     export OPENAI_API_KEY=sk-...
-    # or: export ANTHROPIC_API_KEY=sk-ant-...  LOGLENS_PROVIDER=anthropic
+    # or: export ANTHROPIC_API_KEY=sk-ant-...  LOGSCRIBE_PROVIDER=anthropic
     python examples/basic_usage.py
 
 Without a provider API key configured, AIHandler still runs end-to-end
@@ -21,14 +21,14 @@ import logging
 import sys
 import time
 
-from loglens import AIHandler, get_async_logging_setup, get_settings
+from logscribe import AIHandler, get_async_logging_setup, get_settings
 
 
 def _provider_key_configured() -> bool:
-    """True if the configured provider (LOGLENS_PROVIDER, default
+    """True if the configured provider (LOGSCRIBE_PROVIDER, default
     'openai') has its API key set."""
     settings = get_settings()
-    if settings.loglens_provider == "anthropic":
+    if settings.logscribe_provider == "anthropic":
         return bool(settings.anthropic_api_key)
     return bool(settings.openai_api_key)
 
@@ -36,15 +36,15 @@ def _provider_key_configured() -> bool:
 def run_demo() -> None:
     """Logs a handful of messages through AIHandler and waits for them to
     be batched, scrubbed, rendered, and routed to the LLM."""
-    logger = logging.getLogger("loglens.examples.basic_usage")
+    logger = logging.getLogger("logscribe.examples.basic_usage")
     logger.setLevel(logging.DEBUG)
 
     # AIHandler's default response callback logs the AI's analysis at INFO
-    # to the 'loglens.ai_responses' logger. That logger has no level of its
+    # to the 'logscribe.ai_responses' logger. That logger has no level of its
     # own, so it inherits root's default WARNING and the response is
     # silently dropped unless something enables it -- do that here so the
     # response actually reaches stdout below.
-    logging.getLogger("loglens.ai_responses").setLevel(logging.INFO)
+    logging.getLogger("logscribe.ai_responses").setLevel(logging.INFO)
 
     ai_handler = AIHandler(level=logging.INFO)
     queue_handler, listener = get_async_logging_setup(ai_handler)
@@ -60,7 +60,7 @@ def run_demo() -> None:
             logger.error("division by zero while computing conversion ratio", exc_info=True)
 
         settings = get_settings()
-        wait_seconds = settings.loglens_flush_interval_seconds + 1
+        wait_seconds = settings.logscribe_flush_interval_seconds + 1
         print(f"Waiting {wait_seconds:.1f}s for AIHandler to flush and call the LLM...")
         time.sleep(wait_seconds)
     finally:
@@ -69,7 +69,7 @@ def run_demo() -> None:
         listener.stop()
         ai_handler.close()
 
-    print("Done. Check the 'loglens.ai_responses' logger for the AI's analysis.")
+    print("Done. Check the 'logscribe.ai_responses' logger for the AI's analysis.")
 
 
 def main() -> int:
@@ -79,7 +79,7 @@ def main() -> int:
             "route_prompt() would return None the whole time.\n\n"
             "Set one of:\n"
             "  export OPENAI_API_KEY=sk-...\n"
-            "  export ANTHROPIC_API_KEY=sk-ant-...   (and LOGLENS_PROVIDER=anthropic)\n\n"
+            "  export ANTHROPIC_API_KEY=sk-ant-...   (and LOGSCRIBE_PROVIDER=anthropic)\n\n"
             "then re-run: python examples/basic_usage.py",
             file=sys.stderr,
         )

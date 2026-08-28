@@ -1,6 +1,6 @@
 import logging
 
-from loglens.router.llm_router import LLMRouter
+from logscribe.router.llm_router import LLMRouter
 
 
 class Fake:
@@ -30,7 +30,7 @@ def test_no_providers_returns_none():
 
 
 def test_provider_error_propagates_for_handler_retry():
-    from loglens.providers.base import ProviderError
+    from logscribe.providers.base import ProviderError
 
     class Boom:
         model = "x"
@@ -57,9 +57,9 @@ def test_provider_error_propagates_for_handler_retry():
 
 
 def test_anthropic_defaults_used_when_not_overridden(monkeypatch):
-    from loglens.providers.anthropic_provider import AnthropicProvider
+    from logscribe.providers.anthropic_provider import AnthropicProvider
 
-    monkeypatch.setenv("LOGLENS_PROVIDER", "anthropic")
+    monkeypatch.setenv("LOGSCRIBE_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     r = LLMRouter()
@@ -72,12 +72,12 @@ def test_anthropic_defaults_used_when_not_overridden(monkeypatch):
 
 def test_anthropic_explicit_fast_model_override_survives(monkeypatch):
     # Regression guard for the "Important" review finding: a user on the
-    # anthropic provider who explicitly sets LOGLENS_FAST_MODEL to the
+    # anthropic provider who explicitly sets LOGSCRIBE_FAST_MODEL to the
     # literal string that also happens to be the OpenAI default must not
     # have it silently overwritten with the Anthropic default.
-    monkeypatch.setenv("LOGLENS_PROVIDER", "anthropic")
+    monkeypatch.setenv("LOGSCRIBE_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setenv("LOGLENS_FAST_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("LOGSCRIBE_FAST_MODEL", "gpt-4o-mini")
 
     r = LLMRouter()
 
@@ -87,7 +87,7 @@ def test_anthropic_explicit_fast_model_override_survives(monkeypatch):
 
 
 def test_warn_once_logs_single_warning(caplog):
-    with caplog.at_level(logging.WARNING, logger="loglens.router.llm_router"):
+    with caplog.at_level(logging.WARNING, logger="logscribe.router.llm_router"):
         r = LLMRouter(fast=None, capable=None)
         r.route_prompt("p", [{"levelno": logging.INFO}])
         r.route_prompt("p", [{"levelno": logging.INFO}])

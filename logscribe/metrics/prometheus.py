@@ -43,7 +43,7 @@ class AILoggingMetrics:
         # narrows it for the real-metrics branch instead of it statically
         # remaining `None`.
         real_metrics_module: types.ModuleType | None = None
-        if self.settings.loglens_prometheus_enabled:
+        if self.settings.logscribe_prometheus_enabled:
             try:
                 import prometheus_client as real_metrics_module
             except ImportError:
@@ -58,7 +58,7 @@ class AILoggingMetrics:
             )
             self._build_real_metrics(real_metrics_module)
         else:
-            if not self.settings.loglens_prometheus_enabled:
+            if not self.settings.logscribe_prometheus_enabled:
                 logger.info("Prometheus metrics are disabled by configuration.")
             self.registry = registry
             self._build_noop_metrics()
@@ -71,17 +71,17 @@ class AILoggingMetrics:
 
         # AIHandler Metrics
         self.ai_handler_records_processed_total = Counter(
-            "loglens_handler_records_processed",
+            "logscribe_handler_records_processed",
             "Total number of log records processed by AIHandler.",
             registry=registry,
         )
         self.ai_handler_batches_processed_total = Counter(
-            "loglens_handler_batches_processed",
+            "logscribe_handler_batches_processed",
             "Total number of batches processed by AIHandler.",
             registry=registry,
         )
         self.ai_handler_batch_size_records = Histogram(
-            "loglens_handler_batch_size_records",
+            "logscribe_handler_batch_size_records",
             "Size of batches processed by AIHandler (number of records).",
             buckets=(1, 2, 5, 10, 15, 20, 30, 50, 75, 100, float("inf")),
             registry=registry,
@@ -89,27 +89,27 @@ class AILoggingMetrics:
 
         # Queue Metrics
         self.queue_depth = Gauge(
-            "loglens_queue_depth_records",
+            "logscribe_queue_depth_records",
             "Number of log records currently in the AI processing queue.",
             registry=registry,
         )
 
         # AI Call Metrics
         self.ai_calls_total = Counter(
-            "loglens_ai_calls",
+            "logscribe_ai_calls",
             "Total number of AI API calls made.",
             labelnames=("model", "status"),
             registry=registry,
         )
         self.ai_call_latency_seconds = Histogram(
-            "loglens_ai_call_latency_seconds",
+            "logscribe_ai_call_latency_seconds",
             "Latency of AI API calls in seconds.",
             labelnames=("model",),
             buckets=(0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, float("inf")),
             registry=registry,
         )
         self.ai_call_errors_total = Counter(
-            "loglens_ai_call_errors",
+            "logscribe_ai_call_errors",
             "Total number of errors during AI API calls.",
             labelnames=("model", "error_type"),
             registry=registry,
@@ -117,13 +117,13 @@ class AILoggingMetrics:
 
         # Circuit Breaker Metrics
         self.ai_circuit_breaker_state_changes_total = Counter(
-            "loglens_circuit_breaker_state_changes",
+            "logscribe_circuit_breaker_state_changes",
             "Total number of times the AI call circuit breaker changed state.",
             labelnames=("model", "new_state"),
             registry=registry,
         )
         self.ai_circuit_breaker_currently_open = Gauge(
-            "loglens_circuit_breaker_currently_open",
+            "logscribe_circuit_breaker_currently_open",
             "Indicates if the circuit breaker for a model is currently open (1) or not (0).",
             labelnames=("model",),
             registry=registry,
@@ -131,7 +131,7 @@ class AILoggingMetrics:
 
         # PII Scrubbing Metrics
         self.pii_scrubbed_fields_total = Counter(
-            "loglens_pii_scrubbed_fields",
+            "logscribe_pii_scrubbed_fields",
             "Total number of fields scrubbed by the PII filter.",
             labelnames=("rule_name",),
             registry=registry,
@@ -180,7 +180,7 @@ def start_prometheus_server_if_enabled(settings: Settings | None = None) -> None
     global _prometheus_server_started_flag
     app_settings = settings or get_settings()
 
-    if not app_settings.loglens_prometheus_enabled:
+    if not app_settings.logscribe_prometheus_enabled:
         logger.info("Prometheus metrics server is disabled by configuration.")
         return
 
@@ -194,7 +194,7 @@ def start_prometheus_server_if_enabled(settings: Settings | None = None) -> None
 
             metrics = get_metrics_instance()
             registry = metrics.registry if metrics.registry is not None else REGISTRY
-            port = app_settings.loglens_prometheus_port
+            port = app_settings.logscribe_prometheus_port
             start_http_server(port, registry=registry)
             _prometheus_server_started_flag = True
             logger.info(f"Prometheus metrics server started on port {port}.")
@@ -205,7 +205,7 @@ def start_prometheus_server_if_enabled(settings: Settings | None = None) -> None
             )
         except OSError as e:  # Handle port already in use
             logger.error(
-                f"Failed to start Prometheus server on port {app_settings.loglens_prometheus_port}: {e}. Port might be in use."
+                f"Failed to start Prometheus server on port {app_settings.logscribe_prometheus_port}: {e}. Port might be in use."
             )
         except Exception as e:
             logger.error(f"An unexpected error occurred while starting Prometheus server: {e}")

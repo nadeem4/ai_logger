@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "loglens"
+name = "logscribe"
 version = "0.1.0"
 description = "AI-powered log analysis for Python logging: batch, scrub PII, and route logs to an LLM for insights."
 readme = "README.md"
@@ -35,22 +35,22 @@ openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.30"]
 metrics = ["prometheus-client>=0.19"]
 local = ["transformers>=4.30", "torch>=2.0"]
-all = ["loglens[openai,anthropic,metrics]"]
-dev = ["pytest>=8", "pytest-cov", "ruff==0.16.5", "mypy==2.3.1", "build", "pre-commit", "loglens[all]"]
+all = ["logscribe[openai,anthropic,metrics]"]
+dev = ["pytest>=8", "pytest-cov", "ruff==0.16.5", "mypy==2.3.1", "build", "pre-commit", "logscribe[all]"]
 
 [project.urls]
-Homepage = "https://github.com/nadeem4/loglens"
-Issues = "https://github.com/nadeem4/loglens/issues"
-Changelog = "https://github.com/nadeem4/loglens/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/nadeem4/logscribe"
+Issues = "https://github.com/nadeem4/logscribe/issues"
+Changelog = "https://github.com/nadeem4/logscribe/blob/main/CHANGELOG.md"
 
 [project.scripts]
-loglens-check = "loglens.cli.health_check:main"
+logscribe-check = "logscribe.cli.health_check:main"
 
 [tool.setuptools.packages.find]
-include = ["loglens*"]
+include = ["logscribe*"]
 
 [tool.setuptools.package-data]
-loglens = ["templates/*.jinja2", "py.typed"]
+logscribe = ["templates/*.jinja2", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

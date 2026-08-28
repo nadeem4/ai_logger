@@ -1,4 +1,4 @@
-# This file marks loglens.config as a sub-package.
+# This file marks logscribe.config as a sub-package.
 
 from .settings import Settings, get_settings
 

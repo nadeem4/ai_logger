@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from loglens.handlers.queue_handler import get_async_logging_setup
+from logscribe.handlers.queue_handler import get_async_logging_setup
 
 
 def test_raises_without_any_downstream_handlers():

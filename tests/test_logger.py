@@ -1,6 +1,6 @@
 import logging
 
-from loglens.logger import AILogger, get_ai_logger
+from logscribe.logger import AILogger, get_ai_logger
 
 
 def test_ailogger_is_a_standard_logger_subclass():

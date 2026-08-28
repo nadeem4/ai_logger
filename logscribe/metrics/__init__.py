@@ -1,4 +1,4 @@
-# This file marks loglens.metrics as a sub-package.
+# This file marks logscribe.metrics as a sub-package.
 
 from .prometheus import AILoggingMetrics, get_metrics_instance, start_prometheus_server_if_enabled
 

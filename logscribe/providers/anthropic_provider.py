@@ -7,7 +7,7 @@ class _AnthropicClientLike(Protocol):
     """Structural type for the piece of the anthropic SDK client we actually
     use. Declared here (rather than importing `anthropic.Anthropic` for the
     annotation) so the SDK stays a lazy, function-scoped import -- `import
-    loglens` must succeed without `anthropic` installed. `messages` is typed
+    logscribe` must succeed without `anthropic` installed. `messages` is typed
     `Any` deliberately: the real response is a large block-type union (text,
     tool-use, thinking, ...) we don't need to model -- `complete()` already
     wraps any unexpected shape (e.g. a non-text first block) in a

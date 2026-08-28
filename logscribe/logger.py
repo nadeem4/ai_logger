@@ -7,7 +7,7 @@ import os
 
 # --- Default AILogger Configuration ---
 # These could be moved to a config file or environment variables later
-AI_LOGGER_DEFAULT_LEVEL = os.environ.get("LOGLENS_DEFAULT_LEVEL", "INFO").upper()
+AI_LOGGER_DEFAULT_LEVEL = os.environ.get("LOGSCRIBE_DEFAULT_LEVEL", "INFO").upper()
 
 
 class AILogger(logging.Logger):
@@ -77,15 +77,15 @@ def get_ai_logger(name: str) -> AILogger:
     # Restore original logger class if it was changed,
     # to avoid side effects if other parts of an application
     # expect the standard Logger class.
-    # However, for a true "drop-in" where loglens takes over,
+    # However, for a true "drop-in" where logscribe takes over,
     # we might want to leave it as AILogger.
-    # For now, let's assume loglens is explicitly adopted.
+    # For now, let's assume logscribe is explicitly adopted.
     # If logging.setLoggerClass was called by user at app startup, this is fine.
     # If this get_ai_logger is the *only* way users get AILogger,
     # then we might not need to restore.
     # Consider application-wide setup:
     # import logging
-    # from loglens.logger import AILogger
+    # from logscribe.logger import AILogger
     # logging.setLoggerClass(AILogger)
     # logger = logging.getLogger(__name__) # will be an AILogger
 
