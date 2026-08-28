@@ -1,4 +1,4 @@
-# This file marks ai_logging.config as a sub-package.
+# This file marks loglens.config as a sub-package.
 
 from .settings import get_settings, Settings
 

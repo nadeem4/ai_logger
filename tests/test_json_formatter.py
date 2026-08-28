@@ -1,5 +1,5 @@
 import json, logging
-from ai_logging.utils.json_formatter import JsonFormatter
+from loglens.utils.json_formatter import JsonFormatter
 
 def make_record(msg="hello", level=logging.INFO, exc_info=None):
     return logging.LogRecord("t", level, "f.py", 1, msg, None, exc_info)

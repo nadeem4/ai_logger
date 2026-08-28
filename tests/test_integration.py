@@ -1,6 +1,6 @@
 import logging, time
-from ai_logging import AIHandler, get_async_logging_setup
-from ai_logging.router.llm_router import LLMRouter
+from loglens import AIHandler, get_async_logging_setup
+from loglens.router.llm_router import LLMRouter
 
 class CapturingProvider:
     model = "fake"

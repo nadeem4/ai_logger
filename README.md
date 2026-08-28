@@ -1,6 +1,6 @@
-# AI Logging Package (`ai_logging`)
+# loglens
 
-**`ai_logging` is a Python logging toolkit designed to enhance standard logging with AI-powered analysis, insights, and intelligent routing.**
+**`loglens` is a Python logging toolkit designed to enhance standard logging with AI-powered analysis, insights, and intelligent routing.**
 
 It seamlessly integrates with the standard Python `logging` module, allowing you to send processed log data to Large Language Models (LLMs) via OpenAI or Anthropic for advanced analysis, anomaly detection, or summarization.
 
@@ -23,17 +23,15 @@ It seamlessly integrates with the standard Python `logging` module, allowing you
 ## Installation
 
 ```bash
-pip install -r requirements.txt
-# Or, if/when published to PyPI:
-# pip install ai_logging
+pip install loglens
 ```
 
 Core dependencies are `pydantic`, `pydantic-settings`, and `Jinja2`. Optional extras (declared in `pyproject.toml`) add support for specific providers and metrics:
 
 ```bash
-pip install ai_logging[openai]       # OpenAI provider
-pip install ai_logging[anthropic]    # Anthropic provider
-pip install ai_logging[prometheus]   # Prometheus metrics
+pip install loglens[openai]       # OpenAI provider
+pip install loglens[anthropic]    # Anthropic provider
+pip install loglens[metrics]      # Prometheus metrics
 ```
 
 ## Quick Start
@@ -42,7 +40,7 @@ pip install ai_logging[prometheus]   # Prometheus metrics
 import logging
 import time
 import os
-from ai_logging import (
+from loglens import (
     AIHandler,
     get_async_logging_setup,
     start_prometheus_server_if_enabled,
@@ -52,15 +50,15 @@ from ai_logging import (
 # --- 0. Set Environment Variables (example) ---
 # These should be set in your environment or a .env file
 # os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_API_KEY" # Required for OpenAI
-# os.environ["AI_LOGGING_PROMETHEUS_ENABLED"] = "true"
-# os.environ["AI_LOGGING_FLUSH_INTERVAL_SECONDS"] = "10"
+# os.environ["LOGLENS_PROMETHEUS_ENABLED"] = "true"
+# os.environ["LOGLENS_FLUSH_INTERVAL_SECONDS"] = "10"
 
 def main():
     # --- 1. Start Prometheus Server (optional, based on settings) ---
     settings = get_settings()
     start_prometheus_server_if_enabled(settings)
-    if settings.ai_logging_prometheus_enabled:
-        print(f"Prometheus server (if not already running) attempted start on port {settings.ai_logging_prometheus_port}")
+    if settings.loglens_prometheus_enabled:
+        print(f"Prometheus server (if not already running) attempted start on port {settings.loglens_prometheus_port}")
 
     # --- 2. Get a logger ---
     logger = logging.getLogger("my_app")
@@ -92,8 +90,8 @@ def main():
     logger.critical("Database connection lost!")
 
     # --- 6. Allow time for processing and shutdown ---
-    print(f"Waiting for logs to be processed (approx {settings.ai_logging_flush_interval_seconds + 2}s)...")
-    time.sleep(settings.ai_logging_flush_interval_seconds + 2) # Wait for AIHandler's flush interval + buffer
+    print(f"Waiting for logs to be processed (approx {settings.loglens_flush_interval_seconds + 2}s)...")
+    time.sleep(settings.loglens_flush_interval_seconds + 2) # Wait for AIHandler's flush interval + buffer
 
     print("Shutting down...")
     log_listener.stop()
@@ -109,47 +107,47 @@ See `examples/basic_usage.py` for a more detailed example.
 
 The package is configured primarily through environment variables. A `.env` file can also be used (it will be loaded automatically if present in the working directory where `get_settings()` is first called).
 
-Key environment variables (see `ai_logging/config/settings.py` for all options):
+Key environment variables (see `loglens/config/settings.py` for all options):
 
 *   `OPENAI_API_KEY`: Your OpenAI API key (required for OpenAI models).
-*   `AI_LOGGING_DEFAULT_LEVEL`: Default log level for the `AILogger` class (e.g., `INFO`).
-*   `AI_LOGGING_BATCH_SIZE`: Number of log records to batch before sending to AI (default: `10`).
-*   `AI_LOGGING_FLUSH_INTERVAL_SECONDS`: Interval in seconds to flush logs even if batch size isn't met (default: `5.0`).
-*   `AI_LOGGING_MAX_RETRIES`: Max retries for AI API calls (default: `3`).
+*   `LOGLENS_DEFAULT_LEVEL`: Default log level for the `AILogger` class (e.g., `INFO`).
+*   `LOGLENS_BATCH_SIZE`: Number of log records to batch before sending to AI (default: `10`).
+*   `LOGLENS_FLUSH_INTERVAL_SECONDS`: Interval in seconds to flush logs even if batch size isn't met (default: `5.0`).
+*   `LOGLENS_MAX_RETRIES`: Max retries for AI API calls (default: `3`).
 *   `ANTHROPIC_API_KEY`: Your Anthropic API key (required for the Anthropic provider).
-*   `AI_LOGGING_PROVIDER`: Which provider to route to, `openai` or `anthropic` (default: `openai`).
-*   `AI_LOGGING_FAST_MODEL`: Model used for the fast tier (default: `gpt-4o-mini`).
-*   `AI_LOGGING_CAPABLE_MODEL`: Model used for the capable tier (default: `gpt-4o`).
-*   `AI_LOGGING_CAPABLE_SEVERITY_THRESHOLD`: Log level at or above which the capable tier is used (default: `ERROR`).
-*   `AI_LOGGING_CB_FAILURE_THRESHOLD`: Consecutive batch failures before the circuit breaker opens (default: `3`).
-*   `AI_LOGGING_CB_RESET_TIMEOUT_SECONDS`: Seconds the circuit breaker stays open before allowing a half-open trial request (default: `60.0`).
-*   `AI_LOGGING_JINJA_TEMPLATE_DIR`: Path to a directory containing custom Jinja2 prompt templates.
-*   `AI_LOGGING_JINJA_LOG_PROMPT_TEMPLATE_NAME`: Filename of the Jinja2 template to use for log prompts (default: `default_log_prompt.jinja2`).
-*   `AI_LOGGING_PII_RULES_JSON`: JSON string defining custom PII scrubbing rules.
-*   `AI_LOGGING_PII_USE_DEFAULT_RULES`: Set to `false` to disable default PII rules (default: `true`).
-*   `AI_LOGGING_PROMETHEUS_ENABLED`: Set to `true` to enable Prometheus metrics (default: `true`).
-*   `AI_LOGGING_PROMETHEUS_PORT`: Port for the Prometheus metrics server (default: `9095`).
+*   `LOGLENS_PROVIDER`: Which provider to route to, `openai` or `anthropic` (default: `openai`).
+*   `LOGLENS_FAST_MODEL`: Model used for the fast tier (default: `gpt-4o-mini`).
+*   `LOGLENS_CAPABLE_MODEL`: Model used for the capable tier (default: `gpt-4o`).
+*   `LOGLENS_CAPABLE_SEVERITY_THRESHOLD`: Log level at or above which the capable tier is used (default: `ERROR`).
+*   `LOGLENS_CB_FAILURE_THRESHOLD`: Consecutive batch failures before the circuit breaker opens (default: `3`).
+*   `LOGLENS_CB_RESET_TIMEOUT_SECONDS`: Seconds the circuit breaker stays open before allowing a half-open trial request (default: `60.0`).
+*   `LOGLENS_JINJA_TEMPLATE_DIR`: Path to a directory containing custom Jinja2 prompt templates.
+*   `LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME`: Filename of the Jinja2 template to use for log prompts (default: `default_log_prompt.jinja2`).
+*   `LOGLENS_PII_RULES_JSON`: JSON string defining custom PII scrubbing rules.
+*   `LOGLENS_PII_USE_DEFAULT_RULES`: Set to `false` to disable default PII rules (default: `true`).
+*   `LOGLENS_PROMETHEUS_ENABLED`: Set to `true` to enable Prometheus metrics (default: `true`).
+*   `LOGLENS_PROMETHEUS_PORT`: Port for the Prometheus metrics server (default: `9095`).
 
 ## Core Components
 
-*   **`AILogger` (in `ai_logging.logger`)**: Custom logger class (optional, standard loggers work fine with `AIHandler`).
-*   **`get_ai_logger()` (in `ai_logging.logger`)**: Helper to get an `AILogger` instance.
-*   **`AIHandler` (in `ai_logging.handlers.ai_handler`)**: The core handler that processes logs, batches them, scrubs PII, formats prompts, routes to LLMs, and handles responses.
-*   **`get_async_logging_setup()` (in `ai_logging.handlers.queue_handler`)**: Sets up `QueueHandler` and `QueueListener` for asynchronous logging with downstream handlers (like `AIHandler`).
-*   **`JsonFormatter` (in `ai_logging.utils.json_formatter`)**: A `logging.Formatter` that outputs log records as JSON strings.
-*   **`scrub_pii_from_dict()` (in `ai_logging.utils.pii_filter`)**: Utility to scrub PII from dictionaries.
-*   **`LLMRouter` (in `ai_logging.router.llm_router`)**: Routes a prompt to a fast or capable provider based on the highest log severity in the batch, against a configurable threshold.
-*   **`LLMProvider` / `OpenAIProvider` / `AnthropicProvider` / `ProviderError` (in `ai_logging.providers`)**: The provider layer `LLMRouter` routes to. Each provider lazily imports its SDK and raises `ProviderError` with a `pip install ...` message if it's missing.
-*   **`CircuitBreaker` (in `ai_logging.utils.circuit_breaker`)**: CLOSED / OPEN / HALF_OPEN state machine that protects AI calls from repeatedly hitting a failing provider.
-*   **`Settings` / `get_settings()` (in `ai_logging.config.settings`)**: Pydantic-based configuration management.
-*   **Prometheus Metrics (in `ai_logging.metrics.prometheus`)**: Provides metrics via `get_metrics_instance()` and starts the server via `start_prometheus_server_if_enabled()`.
+*   **`AILogger` (in `loglens.logger`)**: Custom logger class (optional, standard loggers work fine with `AIHandler`).
+*   **`get_ai_logger()` (in `loglens.logger`)**: Helper to get an `AILogger` instance.
+*   **`AIHandler` (in `loglens.handlers.ai_handler`)**: The core handler that processes logs, batches them, scrubs PII, formats prompts, routes to LLMs, and handles responses.
+*   **`get_async_logging_setup()` (in `loglens.handlers.queue_handler`)**: Sets up `QueueHandler` and `QueueListener` for asynchronous logging with downstream handlers (like `AIHandler`).
+*   **`JsonFormatter` (in `loglens.utils.json_formatter`)**: A `logging.Formatter` that outputs log records as JSON strings.
+*   **`scrub_pii_from_dict()` (in `loglens.utils.pii_filter`)**: Utility to scrub PII from dictionaries.
+*   **`LLMRouter` (in `loglens.router.llm_router`)**: Routes a prompt to a fast or capable provider based on the highest log severity in the batch, against a configurable threshold.
+*   **`LLMProvider` / `OpenAIProvider` / `AnthropicProvider` / `ProviderError` (in `loglens.providers`)**: The provider layer `LLMRouter` routes to. Each provider lazily imports its SDK and raises `ProviderError` with a `pip install ...` message if it's missing.
+*   **`CircuitBreaker` (in `loglens.utils.circuit_breaker`)**: CLOSED / OPEN / HALF_OPEN state machine that protects AI calls from repeatedly hitting a failing provider.
+*   **`Settings` / `get_settings()` (in `loglens.config.settings`)**: Pydantic-based configuration management.
+*   **Prometheus Metrics (in `loglens.metrics.prometheus`)**: Provides metrics via `get_metrics_instance()` and starts the server via `start_prometheus_server_if_enabled()`.
 
 ## Health Check CLI
 
-A CLI tool is provided to check the health and configuration of the `ai_logging` package.
+A CLI tool is provided to check the health and configuration of the `loglens` package.
 
 ```bash
-python -m ai_logging.cli.health_check
+loglens-check
 ```
 
 This will:
@@ -163,17 +161,16 @@ This will:
 
 (Placeholder for development setup, running tests, contributing guidelines)
 
-*   Install development dependencies: `pip install -r requirements-dev.txt` (if such a file exists).
-*   Run tests: `pytest` (tests are yet to be written).
+*   Install development dependencies: `pip install -e ".[dev]"`.
+*   Run tests: `pytest`.
 
 ## Future Enhancements
 
 *   Support for more LLM providers and local model types.
 *   Advanced PII detection rules and techniques.
 *   Callback mechanisms for AI responses.
-*   Comprehensive test suite.
 *   Detailed documentation for each module.
 
 ## License
 
-(Placeholder - e.g., MIT License)
+MIT License. See [LICENSE](LICENSE) for the full text.

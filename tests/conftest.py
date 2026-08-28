@@ -1,7 +1,7 @@
-# Shared pytest fixtures for the ai_logging test suite.
+# Shared pytest fixtures for the loglens test suite.
 import pytest
 
-from ai_logging.config.settings import reset_settings
+from loglens.config.settings import reset_settings
 
 
 @pytest.fixture(autouse=True)

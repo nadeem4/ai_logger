@@ -3,9 +3,9 @@ import sys
 
 import pytest
 
-from ai_logging.config.settings import Settings
-from ai_logging.metrics.prometheus import AILoggingMetrics, _NoopMetric
-from ai_logging.handlers.ai_handler import AIHandler
+from loglens.config.settings import Settings
+from loglens.metrics.prometheus import AILoggingMetrics, _NoopMetric
+from loglens.handlers.ai_handler import AIHandler
 
 
 class FakeRouter:
@@ -27,7 +27,7 @@ def test_real_metrics_labeled_counter_readback():
 
     assert (
         registry.get_sample_value(
-            "ai_logging_ai_calls_total", {"model": "llm", "status": "success"}
+            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
         )
         == 1.0
     )
@@ -52,7 +52,7 @@ def test_handler_integration_records_processed_counter():
     h.close()  # deterministic: close() drains and joins the worker
     assert len(h.llm_router.calls) == 1
     assert (
-        registry.get_sample_value("ai_logging_handler_records_processed_total")
+        registry.get_sample_value("loglens_handler_records_processed_total")
         == 3.0
     )
 
@@ -76,11 +76,11 @@ def test_noop_metrics_fallback_when_prometheus_client_unimportable(monkeypatch):
 
 def test_disabled_by_settings_uses_noop_metrics():
     # The second (and separately spec'd, item 7) way into the no-op branch:
-    # prometheus_client is importable, but ai_logging_prometheus_enabled is
+    # prometheus_client is importable, but loglens_prometheus_enabled is
     # False. Built via a Settings instance directly (consistent with how
     # AILoggingMetrics is built elsewhere in this file, and simpler than
     # round-tripping through the get_settings() singleton + monkeypatch env).
-    settings = Settings(ai_logging_prometheus_enabled=False)
+    settings = Settings(loglens_prometheus_enabled=False)
     metrics = AILoggingMetrics(settings=settings)
 
     # These must really be no-ops, not real Counters/Histograms/Gauges.
@@ -118,8 +118,8 @@ def test_two_default_instances_get_distinct_registries():
     metrics_b.ai_calls_total.labels(model="llm", status="success").inc()
 
     assert metrics_a.registry.get_sample_value(
-        "ai_logging_ai_calls_total", {"model": "llm", "status": "success"}
+        "loglens_ai_calls_total", {"model": "llm", "status": "success"}
     ) == 1.0
     assert metrics_b.registry.get_sample_value(
-        "ai_logging_ai_calls_total", {"model": "llm", "status": "success"}
+        "loglens_ai_calls_total", {"model": "llm", "status": "success"}
     ) == 1.0
