@@ -18,17 +18,17 @@ def setup_basic_loglens():
     # --- 1. Get loglens specific settings (optional, AIHandler loads them by default) ---
     # You can inspect settings if needed, e.g., to check if Prometheus is enabled.
     settings = get_settings()
-    print(f"AI Logging Example: Prometheus enabled in settings: {settings.ai_logging_prometheus_enabled}")
+    print(f"AI Logging Example: Prometheus enabled in settings: {settings.loglens_prometheus_enabled}")
     print(f"AI Logging Example: OpenAI API Key is set: {'Yes' if settings.openai_api_key else 'No'}")
     
     # --- 2. Start Prometheus Server (if enabled in settings) ---
     # This should ideally be called once at application startup.
     # The function is idempotent, so calling it multiple times is safe.
     start_prometheus_server_if_enabled(settings)
-    if settings.ai_logging_prometheus_enabled:
+    if settings.loglens_prometheus_enabled:
         print(f"AI Logging Example: Prometheus server (if not already running and prometheus_client is installed) "
-              f"attempted to start on port {settings.ai_logging_prometheus_port}.")
-        print(f"  Metrics endpoint: http://localhost:{settings.ai_logging_prometheus_port}/")
+              f"attempted to start on port {settings.loglens_prometheus_port}.")
+        print(f"  Metrics endpoint: http://localhost:{settings.loglens_prometheus_port}/")
 
 
     # --- 3. Get a logger instance ---
@@ -114,7 +114,7 @@ def setup_basic_loglens():
     # The AIHandler has its own flush_interval.
     # If using QueueListener, logs are passed quickly to AIHandler's buffer.
     # For this demo, let's wait a bit longer than AIHandler's default flush interval.
-    wait_time = settings.ai_logging_flush_interval_seconds + 2
+    wait_time = settings.loglens_flush_interval_seconds + 2
     print(f"\nAI Logging Example: Waiting for {wait_time:.1f}s to allow AIHandler to process and flush...")
     time.sleep(wait_time)
 
@@ -134,20 +134,20 @@ def setup_basic_loglens():
 
     print("\nAI Logging Example: Basic usage demo complete.")
     print("Check console output for logs processed by the listener and AIHandler's AI interactions.")
-    if settings.ai_logging_prometheus_enabled:
-         print(f"If Prometheus server is running, check metrics at http://localhost:{settings.ai_logging_prometheus_port}/")
+    if settings.loglens_prometheus_enabled:
+         print(f"If Prometheus server is running, check metrics at http://localhost:{settings.loglens_prometheus_port}/")
 
 
 if __name__ == "__main__":
     # --- Environment Variable Setup (for testing this example directly) ---
     # In a real app, these would be set in your environment or a .env file.
-    # os.environ["AI_LOGGING_DEFAULT_LEVEL"] = "DEBUG"
+    # os.environ["LOGLENS_DEFAULT_LEVEL"] = "DEBUG"
     # os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_API_KEY" # Replace if you want to test real OpenAI calls
-    # os.environ["AI_LOGGING_PROMETHEUS_ENABLED"] = "true"
-    # os.environ["AI_LOGGING_JINJA_LOG_PROMPT_TEMPLATE_NAME"] = "default_log_prompt.jinja2"
-    # os.environ["AI_LOGGING_CAPABLE_MODEL"] = "gpt-4-turbo-preview" # Example
+    # os.environ["LOGLENS_PROMETHEUS_ENABLED"] = "true"
+    # os.environ["LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME"] = "default_log_prompt.jinja2"
+    # os.environ["LOGLENS_CAPABLE_MODEL"] = "gpt-4-turbo-preview" # Example
     
-    # If OPENAI_API_KEY (or ANTHROPIC_API_KEY, depending on AI_LOGGING_PROVIDER) is not
+    # If OPENAI_API_KEY (or ANTHROPIC_API_KEY, depending on LOGLENS_PROVIDER) is not
     # set, LLMRouter has no provider configured: it logs a warning and route_prompt()
     # returns None instead of making an AI call.
     if not os.getenv("OPENAI_API_KEY"):

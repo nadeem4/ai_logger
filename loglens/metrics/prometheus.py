@@ -37,7 +37,7 @@ class AILoggingMetrics:
     def __init__(self, settings: Optional[Settings] = None, registry=None):
         self.settings = settings or get_settings()
 
-        use_real_metrics = self.settings.ai_logging_prometheus_enabled
+        use_real_metrics = self.settings.loglens_prometheus_enabled
         real_metrics_module = None
         if use_real_metrics:
             try:
@@ -53,7 +53,7 @@ class AILoggingMetrics:
             self.registry = registry if registry is not None else real_metrics_module.CollectorRegistry()
             self._build_real_metrics(real_metrics_module)
         else:
-            if not self.settings.ai_logging_prometheus_enabled:
+            if not self.settings.loglens_prometheus_enabled:
                 logger.info("Prometheus metrics are disabled by configuration.")
             self.registry = registry
             self._build_noop_metrics()
@@ -175,7 +175,7 @@ def start_prometheus_server_if_enabled(settings: Optional[Settings] = None) -> N
     global _prometheus_server_started_flag
     app_settings = settings or get_settings()
 
-    if not app_settings.ai_logging_prometheus_enabled:
+    if not app_settings.loglens_prometheus_enabled:
         logger.info("Prometheus metrics server is disabled by configuration.")
         return
 
@@ -189,7 +189,7 @@ def start_prometheus_server_if_enabled(settings: Optional[Settings] = None) -> N
 
             metrics = get_metrics_instance()
             registry = metrics.registry if metrics.registry is not None else REGISTRY
-            port = app_settings.ai_logging_prometheus_port
+            port = app_settings.loglens_prometheus_port
             start_http_server(port, registry=registry)
             _prometheus_server_started_flag = True
             logger.info(f"Prometheus metrics server started on port {port}.")
@@ -199,6 +199,6 @@ def start_prometheus_server_if_enabled(settings: Optional[Settings] = None) -> N
                 "Metrics server cannot be started."
             )
         except OSError as e:  # Handle port already in use
-            logger.error(f"Failed to start Prometheus server on port {app_settings.ai_logging_prometheus_port}: {e}. Port might be in use.")
+            logger.error(f"Failed to start Prometheus server on port {app_settings.loglens_prometheus_port}: {e}. Port might be in use.")
         except Exception as e:
             logger.error(f"An unexpected error occurred while starting Prometheus server: {e}")

@@ -76,11 +76,11 @@ def test_noop_metrics_fallback_when_prometheus_client_unimportable(monkeypatch):
 
 def test_disabled_by_settings_uses_noop_metrics():
     # The second (and separately spec'd, item 7) way into the no-op branch:
-    # prometheus_client is importable, but ai_logging_prometheus_enabled is
+    # prometheus_client is importable, but loglens_prometheus_enabled is
     # False. Built via a Settings instance directly (consistent with how
     # AILoggingMetrics is built elsewhere in this file, and simpler than
     # round-tripping through the get_settings() singleton + monkeypatch env).
-    settings = Settings(ai_logging_prometheus_enabled=False)
+    settings = Settings(loglens_prometheus_enabled=False)
     metrics = AILoggingMetrics(settings=settings)
 
     # These must really be no-ops, not real Counters/Histograms/Gauges.

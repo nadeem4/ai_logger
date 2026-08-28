@@ -29,17 +29,17 @@ def run_health_checks():
         settings = get_settings()
         cli_logger.info("Successfully loaded settings.")
         # Print a few key settings for verification
-        cli_logger.info(f"  Default Log Level: {settings.ai_logging_default_level}")
-        cli_logger.info(f"  Batch Size: {settings.ai_logging_batch_size}")
-        cli_logger.info(f"  Provider: {settings.ai_logging_provider}")
-        cli_logger.info(f"  Fast Model: {settings.ai_logging_fast_model}")
-        cli_logger.info(f"  Capable Model: {settings.ai_logging_capable_model}")
-        cli_logger.info(f"  Capable Severity Threshold: {settings.ai_logging_capable_severity_threshold}")
+        cli_logger.info(f"  Default Log Level: {settings.loglens_default_level}")
+        cli_logger.info(f"  Batch Size: {settings.loglens_batch_size}")
+        cli_logger.info(f"  Provider: {settings.loglens_provider}")
+        cli_logger.info(f"  Fast Model: {settings.loglens_fast_model}")
+        cli_logger.info(f"  Capable Model: {settings.loglens_capable_model}")
+        cli_logger.info(f"  Capable Severity Threshold: {settings.loglens_capable_severity_threshold}")
         cli_logger.info(f"  OpenAI API Key Set: {'Yes' if settings.openai_api_key else 'No'}")
         cli_logger.info(f"  Anthropic API Key Set: {'Yes' if settings.anthropic_api_key else 'No'}")
-        cli_logger.info(f"  Prometheus Enabled: {settings.ai_logging_prometheus_enabled}")
-        if settings.ai_logging_prometheus_enabled:
-            cli_logger.info(f"  Prometheus Port: {settings.ai_logging_prometheus_port}")
+        cli_logger.info(f"  Prometheus Enabled: {settings.loglens_prometheus_enabled}")
+        if settings.loglens_prometheus_enabled:
+            cli_logger.info(f"  Prometheus Port: {settings.loglens_prometheus_port}")
 
     except Exception as e:
         cli_logger.error(f"Failed to load settings: {e}")
@@ -58,15 +58,15 @@ def run_health_checks():
         router = LLMRouter(settings=settings)
         cli_logger.info("LLMRouter initialized.")
 
-        cli_logger.info(f"  Configured provider: {settings.ai_logging_provider}")
-        cli_logger.info(f"  Fast model: {settings.ai_logging_fast_model}")
-        cli_logger.info(f"  Capable model: {settings.ai_logging_capable_model}")
-        cli_logger.info(f"  Capable severity threshold: {settings.ai_logging_capable_severity_threshold}")
+        cli_logger.info(f"  Configured provider: {settings.loglens_provider}")
+        cli_logger.info(f"  Fast model: {settings.loglens_fast_model}")
+        cli_logger.info(f"  Capable model: {settings.loglens_capable_model}")
+        cli_logger.info(f"  Capable severity threshold: {settings.loglens_capable_severity_threshold}")
 
         if router.fast is not None or router.capable is not None:
             cli_logger.info("  LLM providers are configured and available.")
         else:
-            key_name = "ANTHROPIC_API_KEY" if settings.ai_logging_provider == "anthropic" else "OPENAI_API_KEY"
+            key_name = "ANTHROPIC_API_KEY" if settings.loglens_provider == "anthropic" else "OPENAI_API_KEY"
             cli_logger.warning(
                 f"  No LLM providers were initialized in the LLMRouter ({key_name} not set). "
                 "AI functionality will be limited."
@@ -94,13 +94,13 @@ def run_health_checks():
             cli_logger.info(f"Successfully loaded/created Jinja2 template for AI prompts.")
             # Check if it's the fallback or a loaded one
             if "Log Batch Summary" in temp_ai_handler.jinja_template.render(logs=[]): # Crude check for fallback
-                 if settings.ai_logging_jinja_template_dir or \
-                    settings.ai_logging_jinja_log_prompt_template_name != "default_log_prompt.jinja2":
-                    cli_logger.warning(f"  Using a fallback Jinja2 template. Specified template '{settings.ai_logging_jinja_log_prompt_template_name}' might be missing or invalid.")
+                 if settings.loglens_jinja_template_dir or \
+                    settings.loglens_jinja_log_prompt_template_name != "default_log_prompt.jinja2":
+                    cli_logger.warning(f"  Using a fallback Jinja2 template. Specified template '{settings.loglens_jinja_log_prompt_template_name}' might be missing or invalid.")
                  else:
                     cli_logger.info(f"  Using the default built-in Jinja2 template.")
             else:
-                cli_logger.info(f"  Successfully loaded custom/packaged Jinja2 template: {settings.ai_logging_jinja_log_prompt_template_name}")
+                cli_logger.info(f"  Successfully loaded custom/packaged Jinja2 template: {settings.loglens_jinja_log_prompt_template_name}")
         else:
             cli_logger.error("Jinja2 template object in AIHandler is not a valid Jinja2.Template instance.")
             all_checks_ok = False
@@ -112,7 +112,7 @@ def run_health_checks():
 
     # 4. Check Prometheus Metrics Server (if enabled)
     cli_logger.info("\n--- Checking Prometheus Metrics Server ---")
-    if settings.ai_logging_prometheus_enabled:
+    if settings.loglens_prometheus_enabled:
         try:
             from loglens.metrics.prometheus import start_prometheus_server_if_enabled, get_metrics_instance
             # Mute prometheus module's info logs for cleaner output
@@ -137,7 +137,7 @@ def run_health_checks():
                  if any(not isinstance(m, prometheus_client.metrics.MetricWrapperBase) for m in vars(metrics_instance).values() if hasattr(m, '_type')): # Check if real metrics
                      cli_logger.warning("  Prometheus metrics are using placeholders. Ensure 'prometheus_client' is installed and no init errors occurred.")
 
-            cli_logger.info(f"  Prometheus is configured to run on port {settings.ai_logging_prometheus_port}.")
+            cli_logger.info(f"  Prometheus is configured to run on port {settings.loglens_prometheus_port}.")
             cli_logger.info("  Note: This check does not guarantee the server can start (e.g., port might be in use).")
 
         except ImportError:

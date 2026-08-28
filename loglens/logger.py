@@ -8,7 +8,7 @@ from typing import Any, Union, Mapping
 
 # --- Default AILogger Configuration ---
 # These could be moved to a config file or environment variables later
-AI_LOGGER_DEFAULT_LEVEL = os.environ.get("AI_LOGGING_DEFAULT_LEVEL", "INFO").upper()
+AI_LOGGER_DEFAULT_LEVEL = os.environ.get("LOGLENS_DEFAULT_LEVEL", "INFO").upper()
 
 class AILogger(logging.Logger):
     """

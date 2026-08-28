@@ -37,16 +37,16 @@ class AIHandler(logging.Handler):
                  ) -> None:
         super().__init__(level)
         self.settings = settings or get_settings()
-        self.batch_size = batch_size if batch_size is not None else self.settings.ai_logging_batch_size
-        self.flush_interval = flush_interval if flush_interval is not None else self.settings.ai_logging_flush_interval_seconds
-        self.max_retries = max_retries if max_retries is not None else self.settings.ai_logging_max_retries
-        self.retry_backoff_factor = retry_backoff_factor if retry_backoff_factor is not None else self.settings.ai_logging_retry_backoff_factor
+        self.batch_size = batch_size if batch_size is not None else self.settings.loglens_batch_size
+        self.flush_interval = flush_interval if flush_interval is not None else self.settings.loglens_flush_interval_seconds
+        self.max_retries = max_retries if max_retries is not None else self.settings.loglens_max_retries
+        self.retry_backoff_factor = retry_backoff_factor if retry_backoff_factor is not None else self.settings.loglens_retry_backoff_factor
 
         self.llm_router = llm_router or LLMRouter(self.settings)
         self.pii_scrubber = pii_scrubber or (lambda data: scrub_pii_from_dict(
             data,
-            custom_rules=self.settings.ai_logging_pii_rules_json,
-            use_default_rules=self.settings.ai_logging_pii_use_default_rules
+            custom_rules=self.settings.loglens_pii_rules_json,
+            use_default_rules=self.settings.loglens_pii_use_default_rules
         ))
         self.ai_response_callback = ai_response_callback or self._default_ai_response_logger
 
@@ -74,16 +74,16 @@ class AIHandler(logging.Handler):
         # Circuit breaker: protects the router call from repeatedly hammering
         # a failing LLM provider. See loglens/utils/circuit_breaker.py.
         self.circuit_breaker = CircuitBreaker(
-            failure_threshold=self.settings.ai_logging_cb_failure_threshold,
-            reset_timeout=self.settings.ai_logging_cb_reset_timeout_seconds,
+            failure_threshold=self.settings.loglens_cb_failure_threshold,
+            reset_timeout=self.settings.loglens_cb_reset_timeout_seconds,
         )
 
         # Prometheus metrics
         self.metrics = get_metrics_instance()
 
         # Jinja2 environment and template
-        if self.settings.ai_logging_jinja_template_dir:
-            loader = jinja2.FileSystemLoader(self.settings.ai_logging_jinja_template_dir)
+        if self.settings.loglens_jinja_template_dir:
+            loader = jinja2.FileSystemLoader(self.settings.loglens_jinja_template_dir)
         else:
             # Default to loading templates from a 'templates' directory within the package
             loader = jinja2.PackageLoader('loglens', 'templates')
@@ -98,10 +98,10 @@ class AIHandler(logging.Handler):
             lstrip_blocks=True
         )
         try:
-            self.jinja_template = self.jinja_env.get_template(self.settings.ai_logging_jinja_log_prompt_template_name)
+            self.jinja_template = self.jinja_env.get_template(self.settings.loglens_jinja_log_prompt_template_name)
         except jinja2.TemplateNotFound:
             logging.getLogger(__name__).warning(
-                f"Jinja2 template '{self.settings.ai_logging_jinja_log_prompt_template_name}' not found. "
+                f"Jinja2 template '{self.settings.loglens_jinja_log_prompt_template_name}' not found. "
                 f"Using a basic fallback template. Searched in: {loader}"
             )
             # Fallback to a simple default template string
@@ -263,7 +263,7 @@ class AIHandler(logging.Handler):
             self._default_ai_response_logger(response)
 
     def _default_ai_response_logger(self, response: Any) -> None:
-        ai_response_logger = logging.getLogger(self.settings.ai_logging_ai_response_log_logger_name)
+        ai_response_logger = logging.getLogger(self.settings.loglens_ai_response_log_logger_name)
         if not ai_response_logger.handlers:
             ch = logging.StreamHandler()
             ch.setFormatter(logging.Formatter('%(asctime)s - AI_RESPONSE - %(message)s'))

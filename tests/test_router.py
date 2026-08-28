@@ -41,7 +41,7 @@ def test_provider_error_propagates_for_handler_retry():
 
 def test_anthropic_defaults_used_when_not_overridden(monkeypatch):
     from loglens.providers.anthropic_provider import AnthropicProvider
-    monkeypatch.setenv("AI_LOGGING_PROVIDER", "anthropic")
+    monkeypatch.setenv("LOGLENS_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     r = LLMRouter()
@@ -54,12 +54,12 @@ def test_anthropic_defaults_used_when_not_overridden(monkeypatch):
 
 def test_anthropic_explicit_fast_model_override_survives(monkeypatch):
     # Regression guard for the "Important" review finding: a user on the
-    # anthropic provider who explicitly sets AI_LOGGING_FAST_MODEL to the
+    # anthropic provider who explicitly sets LOGLENS_FAST_MODEL to the
     # literal string that also happens to be the OpenAI default must not
     # have it silently overwritten with the Anthropic default.
-    monkeypatch.setenv("AI_LOGGING_PROVIDER", "anthropic")
+    monkeypatch.setenv("LOGLENS_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setenv("AI_LOGGING_FAST_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("LOGLENS_FAST_MODEL", "gpt-4o-mini")
 
     r = LLMRouter()
 

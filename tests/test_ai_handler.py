@@ -169,7 +169,7 @@ def test_exception_traceback_reaches_the_prompt_via_fallback_template():
     # configured template cannot be found.
     from loglens.config.settings import Settings
 
-    settings = Settings(ai_logging_jinja_log_prompt_template_name="definitely_not_there.jinja2")
+    settings = Settings(loglens_jinja_log_prompt_template_name="definitely_not_there.jinja2")
     h = AIHandler(settings=settings, llm_router=FakeRouter(), batch_size=1, flush_interval=60)
     assert h.jinja_template.name is None, "expected the inline fallback template"
     try:

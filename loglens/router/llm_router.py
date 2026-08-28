@@ -6,7 +6,7 @@ from ..providers.base import LLMProvider, ProviderError
 
 logger = logging.getLogger(__name__)
 
-# Settings keeps ai_logging_fast_model / ai_logging_capable_model as static
+# Settings keeps loglens_fast_model / loglens_capable_model as static
 # OpenAI defaults ("gpt-4o-mini" / "gpt-4o") per the brief. When the
 # configured provider is anthropic, the router substitutes these Anthropic
 # tier defaults instead — but only for fields the user did not explicitly
@@ -55,10 +55,10 @@ class LLMRouter:
         application at startup, so a ProviderError here degrades to "no
         providers" -- exactly like the missing-key path -- with a warning,
         rather than propagating out of AIHandler.__init__()."""
-        provider = self.settings.ai_logging_provider
+        provider = self.settings.loglens_provider
 
-        fast_model = self.settings.ai_logging_fast_model
-        capable_model = self.settings.ai_logging_capable_model
+        fast_model = self.settings.loglens_fast_model
+        capable_model = self.settings.loglens_capable_model
 
         if provider == "anthropic":
             if not self.settings.anthropic_api_key:
@@ -66,9 +66,9 @@ class LLMRouter:
             # Substitute the Anthropic tier defaults only for fields the
             # user did not explicitly set (see module docstring above).
             fields_set = self.settings.model_fields_set
-            if "ai_logging_fast_model" not in fields_set:
+            if "loglens_fast_model" not in fields_set:
                 fast_model = _ANTHROPIC_FAST_MODEL
-            if "ai_logging_capable_model" not in fields_set:
+            if "loglens_capable_model" not in fields_set:
                 capable_model = _ANTHROPIC_CAPABLE_MODEL
             try:
                 from ..providers.anthropic_provider import AnthropicProvider
@@ -106,7 +106,7 @@ class LLMRouter:
             logger.warning(
                 "No LLM providers available (no API key configured for provider '%s'). "
                 "route_prompt() will return None.",
-                self.settings.ai_logging_provider,
+                self.settings.loglens_provider,
             )
             self._warned_no_providers = True
 
@@ -127,7 +127,7 @@ class LLMRouter:
             default=logging.INFO,
         )
 
-        threshold = logging.getLevelName(self.settings.ai_logging_capable_severity_threshold.upper())
+        threshold = logging.getLevelName(self.settings.loglens_capable_severity_threshold.upper())
 
         if highest_severity >= threshold and self.capable is not None:
             provider = self.capable
