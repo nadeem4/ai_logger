@@ -22,5 +22,10 @@ __all__ = [
     "start_prometheus_server_if_enabled",
 ]
 
-# Version of the loglens package
-__version__ = "0.1.0" # Keep this in sync with setup.py and pyproject.toml
+# Version of the loglens package, single-sourced from installed package metadata
+# (which reads it from pyproject.toml).
+from importlib.metadata import version as _pkg_version, PackageNotFoundError
+try:
+    __version__ = _pkg_version("loglens")
+except PackageNotFoundError:  # running from a source checkout without install
+    __version__ = "0.0.0.dev0"
