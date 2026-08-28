@@ -1,4 +1,4 @@
-# This file marks ai_logging.metrics as a sub-package.
+# This file marks loglens.metrics as a sub-package.
 
 from .prometheus import get_metrics_instance, start_prometheus_server_if_enabled, AILoggingMetrics
 

@@ -72,7 +72,7 @@ class AIHandler(logging.Handler):
         self._worker_dead_lock = threading.Lock()
 
         # Circuit breaker: protects the router call from repeatedly hammering
-        # a failing LLM provider. See ai_logging/utils/circuit_breaker.py.
+        # a failing LLM provider. See loglens/utils/circuit_breaker.py.
         self.circuit_breaker = CircuitBreaker(
             failure_threshold=self.settings.ai_logging_cb_failure_threshold,
             reset_timeout=self.settings.ai_logging_cb_reset_timeout_seconds,
@@ -86,7 +86,7 @@ class AIHandler(logging.Handler):
             loader = jinja2.FileSystemLoader(self.settings.ai_logging_jinja_template_dir)
         else:
             # Default to loading templates from a 'templates' directory within the package
-            loader = jinja2.PackageLoader('ai_logging', 'templates')
+            loader = jinja2.PackageLoader('loglens', 'templates')
 
         self.jinja_env = jinja2.Environment(
             loader=loader,
@@ -447,7 +447,7 @@ if __name__ == '__main__':
     ai_handler = AIHandler(batch_size=3, flush_interval=5.0)
     ai_handler.setLevel(logging.INFO)
 
-    demo_logger = logging.getLogger("ai_logging.demo_ai_handler")
+    demo_logger = logging.getLogger("loglens.demo_ai_handler")
     demo_logger.setLevel(logging.DEBUG)
     demo_logger.addHandler(ai_handler)
     demo_logger.propagate = False

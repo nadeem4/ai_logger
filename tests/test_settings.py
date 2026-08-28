@@ -2,7 +2,7 @@ import importlib
 
 import pytest
 
-from ai_logging.config.settings import get_settings, reset_settings
+from loglens.config.settings import get_settings, reset_settings
 
 
 def test_defaults_load_with_no_env():
@@ -27,6 +27,6 @@ def test_invalid_log_level_raises(monkeypatch):
 
 @pytest.mark.filterwarnings("error::DeprecationWarning")
 def test_settings_module_import_raises_no_deprecation_warning():
-    import ai_logging.config.settings as settings_module
+    import loglens.config.settings as settings_module
 
     importlib.reload(settings_module)

@@ -8,7 +8,7 @@ from pydantic import Field, field_validator, Json
 
 class Settings(BaseSettings):
     """
-    Configuration settings for the AI Logging package.
+    Configuration settings for the LogLens package.
     Settings are loaded from environment variables.
     """
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore', case_sensitive=False)
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # --- AI Response Handling ---
     # 'LOG' (to a separate logger), 'CALLBACK', 'FILE', 'NONE'
     ai_logging_ai_response_handler_type: str = Field(default="LOG", validation_alias="AI_LOGGING_AI_RESPONSE_HANDLER_TYPE")
-    ai_logging_ai_response_log_logger_name: str = Field(default="ai_logging.ai_responses", validation_alias="AI_LOGGING_AI_RESPONSE_LOG_LOGGER_NAME")
+    ai_logging_ai_response_log_logger_name: str = Field(default="loglens.ai_responses", validation_alias="AI_LOGGING_AI_RESPONSE_LOG_LOGGER_NAME")
     ai_logging_ai_response_file_path: Optional[str] = Field(default=None, validation_alias="AI_LOGGING_AI_RESPONSE_FILE_PATH")
     # For CALLBACK type, the application would need to register a callback function.
 

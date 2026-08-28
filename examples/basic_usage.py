@@ -2,8 +2,8 @@ import logging
 import time
 import os
 
-# Import components from the ai_logging package
-from ai_logging import (
+# Import components from the loglens package
+from loglens import (
     get_ai_logger,
     AIHandler,
     JsonFormatter,
@@ -12,10 +12,10 @@ from ai_logging import (
     get_settings
 )
 
-def setup_basic_ai_logging():
+def setup_basic_loglens():
     """Sets up a logger with AIHandler for demonstration."""
 
-    # --- 1. Get ai_logging specific settings (optional, AIHandler loads them by default) ---
+    # --- 1. Get loglens specific settings (optional, AIHandler loads them by default) ---
     # You can inspect settings if needed, e.g., to check if Prometheus is enabled.
     settings = get_settings()
     print(f"AI Logging Example: Prometheus enabled in settings: {settings.ai_logging_prometheus_enabled}")
@@ -155,5 +155,5 @@ if __name__ == "__main__":
         print("         configured, so AI calls will be skipped (route_prompt() returns None).")
         print("         Set this variable if you want to test with actual OpenAI models.\n")
 
-    setup_basic_ai_logging()
+    setup_basic_loglens()
     logging.shutdown() # Ensure all handlers are closed

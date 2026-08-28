@@ -1,4 +1,4 @@
-from ai_logging.utils.circuit_breaker import CircuitBreaker
+from loglens.utils.circuit_breaker import CircuitBreaker
 
 
 def test_opens_after_threshold_failures():

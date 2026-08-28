@@ -49,7 +49,7 @@ if __name__ == '__main__':
     # It shows how to use get_async_logging_setup.
 
     # 1. Get a logger instance
-    demo_logger = logging.getLogger("ai_logging.demo_async")
+    demo_logger = logging.getLogger("loglens.demo_async")
     demo_logger.setLevel(logging.DEBUG) # Process all messages from DEBUG upwards
 
     # 2. Create downstream handler(s) - e.g., a console handler

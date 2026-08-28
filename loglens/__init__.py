@@ -1,4 +1,4 @@
-# This file marks ai_logging as a package.
+# This file marks loglens as a package.
 
 # Expose key components for easier import
 from .logger import AILogger, get_ai_logger
@@ -22,5 +22,5 @@ __all__ = [
     "start_prometheus_server_if_enabled",
 ]
 
-# Version of the ai_logging package
+# Version of the loglens package
 __version__ = "0.1.0" # Keep this in sync with setup.py and pyproject.toml

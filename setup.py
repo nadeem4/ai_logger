@@ -14,7 +14,7 @@ def read_readme(filename="README.md"):
     with open(os.path.join(curr_dir, filename), encoding='utf-8') as f:
         return f.read()
 
-# Get version from ai_logging/__init__.py
+# Get version from loglens/__init__.py
 # This avoids importing the package directly, which might cause issues if dependencies are not yet installed.
 def get_version(rel_path):
     curr_dir = os.path.abspath(os.path.dirname(__file__))
@@ -25,7 +25,7 @@ def get_version(rel_path):
                 return line.split(delim)[1]
     raise RuntimeError("Unable to find version string.")
 
-VERSION = get_version("ai_logging/__init__.py") # Path relative to setup.py
+VERSION = get_version("loglens/__init__.py") # Path relative to setup.py
 
 # Define core requirements
 # Specific versions can be added if necessary, e.g., "pydantic>=2.0"

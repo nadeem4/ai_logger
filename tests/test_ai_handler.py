@@ -1,5 +1,5 @@
 import logging, queue, sys, threading, time
-from ai_logging.handlers.ai_handler import AIHandler
+from loglens.handlers.ai_handler import AIHandler
 
 class FakeRouter:
     def __init__(self):
@@ -117,7 +117,7 @@ def test_post_close_emit_is_logged_not_silently_dropped(caplog):
     # logged instead.
     h = make_handler(batch_size=1, flush_interval=60)
     h.close()
-    with caplog.at_level(logging.WARNING, logger="ai_logging.handlers.ai_handler"):
+    with caplog.at_level(logging.WARNING, logger="loglens.handlers.ai_handler"):
         h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "after close", None, None))
     assert not h.llm_router.calls, "router must not be called after the worker has exited"
     assert "no longer running" in caplog.text
@@ -167,7 +167,7 @@ def test_exception_traceback_reaches_the_prompt():
 def test_exception_traceback_reaches_the_prompt_via_fallback_template():
     # Same bug, second site: the inline fallback template used when the
     # configured template cannot be found.
-    from ai_logging.config.settings import Settings
+    from loglens.config.settings import Settings
 
     settings = Settings(ai_logging_jinja_log_prompt_template_name="definitely_not_there.jinja2")
     h = AIHandler(settings=settings, llm_router=FakeRouter(), batch_size=1, flush_interval=60)
@@ -199,7 +199,7 @@ def test_none_router_response_is_not_reported_as_a_successful_call():
     # calls at sub-millisecond latency while making no calls at all.
     from prometheus_client import CollectorRegistry
 
-    from ai_logging.metrics.prometheus import AILoggingMetrics
+    from loglens.metrics.prometheus import AILoggingMetrics
 
     class NoProviderRouter:
         def route_prompt(self, prompt, records):
@@ -220,19 +220,19 @@ def test_none_router_response_is_not_reported_as_a_successful_call():
     assert received == [], "callback must not be invoked when no AI call was made"
     assert (
         registry.get_sample_value(
-            "ai_logging_ai_calls_total", {"model": "llm", "status": "success"}
+            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
         )
         is None
     ), "a None response must not be counted as a successful AI call"
     assert (
         registry.get_sample_value(
-            "ai_logging_ai_calls_total", {"model": "llm", "status": "no_provider"}
+            "loglens_ai_calls_total", {"model": "llm", "status": "no_provider"}
         )
         == 1.0
     )
     assert (
         registry.get_sample_value(
-            "ai_logging_ai_call_latency_seconds_count", {"model": "llm"}
+            "loglens_ai_call_latency_seconds_count", {"model": "llm"}
         )
         is None
     ), "no latency may be observed for a call that never happened"
@@ -245,7 +245,7 @@ def test_handler_constructs_when_provider_sdk_is_missing(monkeypatch, caplog):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setitem(sys.modules, "openai", None)
 
-    with caplog.at_level(logging.WARNING, logger="ai_logging.router.llm_router"):
+    with caplog.at_level(logging.WARNING, logger="loglens.router.llm_router"):
         h = AIHandler(batch_size=1, flush_interval=60)  # must not raise
     try:
         assert h.llm_router.fast is None and h.llm_router.capable is None
@@ -325,7 +325,7 @@ def test_close_racing_live_emit_never_loses_records_silently(caplog):
                 time.sleep(0.0005)
 
         threads = [threading.Thread(target=produce) for _ in range(producers)]
-        with caplog.at_level(logging.WARNING, logger="ai_logging.handlers.ai_handler"):
+        with caplog.at_level(logging.WARNING, logger="loglens.handlers.ai_handler"):
             for t in threads:
                 t.start()
             started.wait(2)

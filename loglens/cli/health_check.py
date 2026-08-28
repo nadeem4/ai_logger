@@ -4,28 +4,28 @@ import argparse
 # It's good practice for CLI tools not to configure the root logger directly
 # unless explicitly intended. Applications using the library might have their own setup.
 # However, for a health check, some minimal output is needed.
-cli_logger = logging.getLogger("ai_logging_health_check")
+cli_logger = logging.getLogger("loglens_health_check")
 handler = logging.StreamHandler()
 formatter = logging.Formatter('[%(levelname)s] %(name)s: %(message)s')
 handler.setFormatter(formatter)
 cli_logger.addHandler(handler)
 cli_logger.setLevel(logging.INFO) # Default level for health check output
 
-# Adjust ai_logging package loggers if too verbose during health check
-logging.getLogger("ai_logging").setLevel(logging.WARNING)
+# Adjust loglens package loggers if too verbose during health check
+logging.getLogger("loglens").setLevel(logging.WARNING)
 
 
 def run_health_checks():
     """
-    Performs a series of health checks on the ai_logging package configuration and components.
+    Performs a series of health checks on the loglens package configuration and components.
     """
-    cli_logger.info("Starting AI Logging Package Health Check...")
+    cli_logger.info("Starting LogLens Package Health Check...")
     all_checks_ok = True
 
     # 1. Load Settings
     cli_logger.info("\n--- Checking Configuration Settings ---")
     try:
-        from ai_logging.config.settings import get_settings, Settings
+        from loglens.config.settings import get_settings, Settings
         settings = get_settings()
         cli_logger.info("Successfully loaded settings.")
         # Print a few key settings for verification
@@ -51,9 +51,9 @@ def run_health_checks():
     # 2. Check LLM Router and Model Availability
     cli_logger.info("\n--- Checking LLM Router & Models ---")
     try:
-        from ai_logging.router.llm_router import LLMRouter
+        from loglens.router.llm_router import LLMRouter
         # Mute internal LLMRouter info logs for cleaner health check output
-        logging.getLogger("ai_logging.router.llm_router").setLevel(logging.WARNING)
+        logging.getLogger("loglens.router.llm_router").setLevel(logging.WARNING)
         
         router = LLMRouter(settings=settings)
         cli_logger.info("LLMRouter initialized.")
@@ -81,10 +81,10 @@ def run_health_checks():
     cli_logger.info("\n--- Checking Jinja2 Template ---")
     try:
         import jinja2
-        from ai_logging.handlers.ai_handler import AIHandler # To access its template loading logic
-        
+        from loglens.handlers.ai_handler import AIHandler # To access its template loading logic
+
         # Temporarily set AIHandler's logger to WARNING to avoid its info logs here
-        logging.getLogger("ai_logging.handlers.ai_handler").setLevel(logging.WARNING)
+        logging.getLogger("loglens.handlers.ai_handler").setLevel(logging.WARNING)
 
         # We need an AIHandler instance to check its template
         # This is a bit indirect but tests the same logic AIHandler uses.
@@ -114,9 +114,9 @@ def run_health_checks():
     cli_logger.info("\n--- Checking Prometheus Metrics Server ---")
     if settings.ai_logging_prometheus_enabled:
         try:
-            from ai_logging.metrics.prometheus import start_prometheus_server_if_enabled, get_metrics_instance
+            from loglens.metrics.prometheus import start_prometheus_server_if_enabled, get_metrics_instance
             # Mute prometheus module's info logs for cleaner output
-            logging.getLogger("ai_logging.metrics.prometheus").setLevel(logging.WARNING)
+            logging.getLogger("loglens.metrics.prometheus").setLevel(logging.WARNING)
 
             # Check if prometheus_client is installed
             import prometheus_client # type: ignore
@@ -152,7 +152,7 @@ def run_health_checks():
     # Final Result
     cli_logger.info("\n--- Health Check Summary ---")
     if all_checks_ok:
-        cli_logger.info("All essential checks passed. AI Logging package appears to be configured correctly.")
+        cli_logger.info("All essential checks passed. LogLens package appears to be configured correctly.")
         cli_logger.info("Note: Functional tests (e.g., actual AI calls) are not part of this health check.")
         return True
     else:
@@ -160,7 +160,7 @@ def run_health_checks():
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Health check for the AI Logging package.")
+    parser = argparse.ArgumentParser(description="Health check for the LogLens package.")
     # Add any arguments if needed in the future, e.g., --verbose
     args = parser.parse_args()
 

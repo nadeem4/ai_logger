@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock
 import pytest
-from ai_logging.providers.base import ProviderError
-from ai_logging.providers.openai_provider import OpenAIProvider
-from ai_logging.providers.anthropic_provider import AnthropicProvider
+from loglens.providers.base import ProviderError
+from loglens.providers.openai_provider import OpenAIProvider
+from loglens.providers.anthropic_provider import AnthropicProvider
 
 def test_openai_provider_calls_chat_completions():
     client = MagicMock()
