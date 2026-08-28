@@ -19,7 +19,7 @@ def test_main_returns_nonzero_when_checks_fail(monkeypatch):
     # contains pytest's own arguments -- pin it so parse_args() sees none.
     monkeypatch.setattr("sys.argv", ["loglens-check"])
 
-    assert main() != 0
+    assert main() == 1
 
 
 def test_main_returns_zero_when_checks_pass(monkeypatch):
