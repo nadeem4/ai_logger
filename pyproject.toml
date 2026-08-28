@@ -37,7 +37,7 @@ anthropic = ["anthropic>=0.30"]
 metrics = ["prometheus-client>=0.19"]
 local = ["transformers>=4.30", "torch>=2.0"]
 all = ["loglens[openai,anthropic,metrics]"]
-dev = ["pytest>=8", "pytest-cov", "ruff", "mypy", "build", "loglens[all]"]
+dev = ["pytest>=8", "pytest-cov", "ruff", "mypy", "build", "pre-commit", "loglens[all]"]
 
 [project.urls]
 Homepage = "https://github.com/nadeem4/loglens"
