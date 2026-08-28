@@ -1,4 +1,4 @@
-# AI Logging Package (`loglens`)
+# loglens
 
 **`loglens` is a Python logging toolkit designed to enhance standard logging with AI-powered analysis, insights, and intelligent routing.**
 
@@ -23,17 +23,15 @@ It seamlessly integrates with the standard Python `logging` module, allowing you
 ## Installation
 
 ```bash
-pip install -r requirements.txt
-# Or, if/when published to PyPI:
-# pip install ai_logging
+pip install loglens
 ```
 
 Core dependencies are `pydantic`, `pydantic-settings`, and `Jinja2`. Optional extras (declared in `pyproject.toml`) add support for specific providers and metrics:
 
 ```bash
-pip install ai_logging[openai]       # OpenAI provider
-pip install ai_logging[anthropic]    # Anthropic provider
-pip install ai_logging[prometheus]   # Prometheus metrics
+pip install loglens[openai]       # OpenAI provider
+pip install loglens[anthropic]    # Anthropic provider
+pip install loglens[metrics]      # Prometheus metrics
 ```
 
 ## Quick Start
@@ -149,7 +147,7 @@ Key environment variables (see `loglens/config/settings.py` for all options):
 A CLI tool is provided to check the health and configuration of the `loglens` package.
 
 ```bash
-python -m loglens.cli.health_check
+loglens-check
 ```
 
 This will:
@@ -176,4 +174,4 @@ This will:
 
 ## License
 
-(Placeholder - e.g., MIT License)
+MIT License. See [LICENSE](LICENSE) for the full text.
