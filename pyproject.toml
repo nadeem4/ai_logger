@@ -37,7 +37,7 @@ anthropic = ["anthropic>=0.30"]
 metrics = ["prometheus-client>=0.19"]
 local = ["transformers>=4.30", "torch>=2.0"]
 all = ["loglens[openai,anthropic,metrics]"]
-dev = ["pytest>=8", "pytest-cov", "ruff", "mypy", "build", "pre-commit", "loglens[all]"]
+dev = ["pytest>=8", "pytest-cov", "ruff==0.16.5", "mypy==2.3.1", "build", "pre-commit", "loglens[all]"]
 
 [project.urls]
 Homepage = "https://github.com/nadeem4/loglens"
@@ -71,5 +71,8 @@ select = ["E", "F", "W", "I", "UP"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.9"
+# No python_version pin: mypy 2.x refuses anything below 3.10 and silently
+# falls back to its own default, so pinning 3.9 here would be a no-op that
+# asserts a guarantee it doesn't provide. 3.9 syntax gating is handled by
+# [tool.ruff]'s target-version = "py39" instead.
 ignore_missing_imports = true

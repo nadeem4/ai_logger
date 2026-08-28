@@ -158,7 +158,7 @@ def test_close_stops_flush_timer_permanently():
     # _timed_flush (i.e. past the point where close()'s cancel() would be a
     # no-op) to reproduce the self-re-arming-timer-on-a-closed-handler bug.
     h = make_handler(batch_size=100, flush_interval=60)
-    barrier = threading.Barrier(2)
+    barrier = threading.Barrier(2, timeout=5)
 
     def fire_timed_flush():
         barrier.wait()
@@ -357,6 +357,7 @@ def test_close_racing_live_emit_never_loses_records_silently(caplog):
             h.close()  # races the still-running producers
             for t in threads:
                 t.join(5)
+                assert not t.is_alive()
 
         received = sum(len(records) for _, records in router.calls)
         still_buffered = len(h._buffer)

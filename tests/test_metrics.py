@@ -12,7 +12,7 @@ from loglens.metrics.prometheus import AILoggingMetrics, _NoopMetric
 
 def _free_port() -> int:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(("localhost", 0))
+    sock.bind(("0.0.0.0", 0))
     port = sock.getsockname()[1]
     sock.close()
     return port
