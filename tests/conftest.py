@@ -1,7 +1,7 @@
-# Shared pytest fixtures for the loglens test suite.
+# Shared pytest fixtures for the logscribe test suite.
 import pytest
 
-from loglens.config.settings import reset_settings
+from logscribe.config.settings import reset_settings
 
 
 @pytest.fixture(autouse=True)

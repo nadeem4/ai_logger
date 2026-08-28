@@ -1,11 +1,11 @@
 """Custom PII rule demonstrations.
 
-loglens' default PII rules catch emails, IPv4 addresses, and common credit
+logscribe' default PII rules catch emails, IPv4 addresses, and common credit
 card formats (see docs/PRIVACY.md), but not application-specific
 identifiers. This example scrubs an internal order ID like "ORD-482910"
 two different ways:
 
-  1. LOGLENS_PII_RULES_JSON: a JSON-encoded list of extra rules that
+  1. LOGSCRIBE_PII_RULES_JSON: a JSON-encoded list of extra rules that
      AIHandler's *default* pii_scrubber (built from Settings) picks up
      automatically -- no code change needed.
   2. pii_scrubber=: a fully custom callable passed straight to AIHandler,
@@ -23,12 +23,12 @@ import json
 import logging
 import os
 
-from loglens import AIHandler
-from loglens.config.settings import reset_settings
-from loglens.utils.pii_filter import scrub_pii_from_dict
+from logscribe import AIHandler
+from logscribe.config.settings import reset_settings
+from logscribe.utils.pii_filter import scrub_pii_from_dict
 
 # A rule dict has 'name', 'regex' (str or compiled Pattern), and
-# 'replacement' (str or callable) -- see loglens/utils/pii_filter.py.
+# 'replacement' (str or callable) -- see logscribe/utils/pii_filter.py.
 ORDER_ID_RULE = {
     "name": "order_id",
     "regex": r"\bORD-\d{6}\b",
@@ -37,23 +37,23 @@ ORDER_ID_RULE = {
 
 
 def demo_env_var_rules() -> None:
-    """LOGLENS_PII_RULES_JSON: extra rules loaded from settings and
+    """LOGSCRIBE_PII_RULES_JSON: extra rules loaded from settings and
     applied by AIHandler's default pii_scrubber."""
-    os.environ["LOGLENS_PII_RULES_JSON"] = json.dumps([ORDER_ID_RULE])
+    os.environ["LOGSCRIBE_PII_RULES_JSON"] = json.dumps([ORDER_ID_RULE])
     reset_settings()  # force Settings to re-read the env var we just set
 
     handler = AIHandler(batch_size=1, flush_interval=0.2)
     try:
-        logger = logging.getLogger("loglens.examples.custom_pii_rules.env_var")
+        logger = logging.getLogger("logscribe.examples.custom_pii_rules.env_var")
         logger.setLevel(logging.INFO)
         logger.addHandler(handler)
         logger.info("Refund issued for order ORD-482910")
     finally:
         handler.close()
-        del os.environ["LOGLENS_PII_RULES_JSON"]
+        del os.environ["LOGSCRIBE_PII_RULES_JSON"]
         reset_settings()
 
-    print("demo_env_var_rules: order ID scrubbed via LOGLENS_PII_RULES_JSON.")
+    print("demo_env_var_rules: order ID scrubbed via LOGSCRIBE_PII_RULES_JSON.")
 
 
 def demo_pii_scrubber_callable() -> None:
@@ -65,7 +65,7 @@ def demo_pii_scrubber_callable() -> None:
 
     handler = AIHandler(batch_size=1, flush_interval=0.2, pii_scrubber=scrub)
     try:
-        logger = logging.getLogger("loglens.examples.custom_pii_rules.callable")
+        logger = logging.getLogger("logscribe.examples.custom_pii_rules.callable")
         logger.setLevel(logging.INFO)
         logger.addHandler(handler)
         logger.info("Refund issued for order ORD-777001")

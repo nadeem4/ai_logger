@@ -1,7 +1,7 @@
 """Custom Jinja2 prompt template demonstration.
 
 Points AIHandler at a project-local template directory and template name
-via LOGLENS_JINJA_TEMPLATE_DIR / LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME,
+via LOGSCRIBE_JINJA_TEMPLATE_DIR / LOGSCRIBE_JINJA_LOG_PROMPT_TEMPLATE_NAME,
 instead of the package's built-in default_log_prompt.jinja2. See
 examples/templates/incident_prompt.jinja2 -- it asks the model to
 structure its answer as SEVERITY / ROOT CAUSE / SUGGESTED ACTION sections,
@@ -19,16 +19,16 @@ import logging
 import os
 from pathlib import Path
 
-from loglens import AIHandler
-from loglens.config.settings import reset_settings
+from logscribe import AIHandler
+from logscribe.config.settings import reset_settings
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 TEMPLATE_NAME = "incident_prompt.jinja2"
 
 
 def main() -> None:
-    os.environ["LOGLENS_JINJA_TEMPLATE_DIR"] = str(TEMPLATE_DIR)
-    os.environ["LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME"] = TEMPLATE_NAME
+    os.environ["LOGSCRIBE_JINJA_TEMPLATE_DIR"] = str(TEMPLATE_DIR)
+    os.environ["LOGSCRIBE_JINJA_LOG_PROMPT_TEMPLATE_NAME"] = TEMPLATE_NAME
     reset_settings()  # force Settings to re-read the env vars we just set
 
     handler = AIHandler(batch_size=1, flush_interval=0.2)
@@ -39,14 +39,14 @@ def main() -> None:
         # template actually loaded.
         print(f"AIHandler loaded template: {handler.jinja_template.name}")
 
-        logger = logging.getLogger("loglens.examples.custom_prompt_template")
+        logger = logging.getLogger("logscribe.examples.custom_prompt_template")
         logger.setLevel(logging.INFO)
         logger.addHandler(handler)
         logger.error("payment-service pod OOMKilled after a memory spike")
     finally:
         handler.close()
-        del os.environ["LOGLENS_JINJA_TEMPLATE_DIR"]
-        del os.environ["LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME"]
+        del os.environ["LOGSCRIBE_JINJA_TEMPLATE_DIR"]
+        del os.environ["LOGSCRIBE_JINJA_LOG_PROMPT_TEMPLATE_NAME"]
         reset_settings()
 
     print("Done. The rendered prompt asked for SEVERITY / ROOT CAUSE / SUGGESTED ACTION.")

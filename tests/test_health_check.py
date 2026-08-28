@@ -1,4 +1,4 @@
-# Exit-code coverage for the `loglens-check` console script.
+# Exit-code coverage for the `logscribe-check` console script.
 #
 # The autouse clean_settings fixture in conftest.py deletes
 # OPENAI_API_KEY / ANTHROPIC_API_KEY and resets the settings singleton
@@ -14,7 +14,7 @@ import sys
 
 import pytest
 
-from loglens.cli.health_check import HealthStatus, collect_health_status, main, run_health_checks
+from logscribe.cli.health_check import HealthStatus, collect_health_status, main, run_health_checks
 
 
 def test_main_returns_nonzero_when_checks_fail(monkeypatch):
@@ -23,28 +23,28 @@ def test_main_returns_nonzero_when_checks_fail(monkeypatch):
     # agree with that "one or more health checks failed" outcome.
     # argparse reads sys.argv by default, which under the test runner
     # contains pytest's own arguments -- pin it so parse_args() sees none.
-    monkeypatch.setattr("sys.argv", ["loglens-check"])
+    monkeypatch.setattr("sys.argv", ["logscribe-check"])
 
     assert main() == 1
 
 
 def test_main_returns_zero_when_checks_pass(monkeypatch):
-    monkeypatch.setattr("sys.argv", ["loglens-check"])
-    monkeypatch.setenv("LOGLENS_PROVIDER", "anthropic")
+    monkeypatch.setattr("sys.argv", ["logscribe-check"])
+    monkeypatch.setenv("LOGSCRIBE_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     assert main() == 0
 
 
 def test_run_health_checks_reports_settings_load_failure(monkeypatch, caplog):
-    import loglens.config.settings as settings_module
+    import logscribe.config.settings as settings_module
 
     def boom():
         raise RuntimeError("settings blew up")
 
     monkeypatch.setattr(settings_module, "get_settings", boom)
 
-    with caplog.at_level(logging.ERROR, logger="loglens_health_check"):
+    with caplog.at_level(logging.ERROR, logger="logscribe_health_check"):
         result = run_health_checks()
 
     assert result is False
@@ -52,14 +52,14 @@ def test_run_health_checks_reports_settings_load_failure(monkeypatch, caplog):
 
 
 def test_run_health_checks_reports_router_init_failure(monkeypatch, caplog):
-    import loglens.router.llm_router as router_module
+    import logscribe.router.llm_router as router_module
 
     def boom(settings):
         raise RuntimeError("router blew up")
 
     monkeypatch.setattr(router_module, "LLMRouter", boom)
 
-    with caplog.at_level(logging.ERROR, logger="loglens_health_check"):
+    with caplog.at_level(logging.ERROR, logger="logscribe_health_check"):
         result = run_health_checks()
 
     assert result is False
@@ -71,23 +71,23 @@ def test_run_health_checks_warns_when_configured_template_falls_back(monkeypatch
     # fallback template. run_health_checks() must notice that mismatch (a
     # named template was requested but the fallback text came back) and warn
     # rather than silently report success.
-    monkeypatch.setenv("LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME", "definitely_missing.jinja2")
+    monkeypatch.setenv("LOGSCRIBE_JINJA_LOG_PROMPT_TEMPLATE_NAME", "definitely_missing.jinja2")
 
-    with caplog.at_level(logging.WARNING, logger="loglens_health_check"):
+    with caplog.at_level(logging.WARNING, logger="logscribe_health_check"):
         run_health_checks()
 
     assert "Using a fallback Jinja2 template" in caplog.text
 
 
 def test_run_health_checks_reports_jinja_check_failure(monkeypatch, caplog):
-    import loglens.handlers.ai_handler as ai_handler_module
+    import logscribe.handlers.ai_handler as ai_handler_module
 
     def boom(**kwargs):
         raise RuntimeError("template check blew up")
 
     monkeypatch.setattr(ai_handler_module, "AIHandler", boom)
 
-    with caplog.at_level(logging.ERROR, logger="loglens_health_check"):
+    with caplog.at_level(logging.ERROR, logger="logscribe_health_check"):
         result = run_health_checks()
 
     assert result is False
@@ -97,30 +97,30 @@ def test_run_health_checks_reports_jinja_check_failure(monkeypatch, caplog):
 def test_run_health_checks_warns_when_prometheus_client_missing(monkeypatch, caplog):
     monkeypatch.setitem(sys.modules, "prometheus_client", None)
 
-    with caplog.at_level(logging.WARNING, logger="loglens_health_check"):
+    with caplog.at_level(logging.WARNING, logger="logscribe_health_check"):
         run_health_checks()
 
     assert "'prometheus_client' library is not installed" in caplog.text
 
 
 def test_run_health_checks_reports_prometheus_disabled(monkeypatch, caplog):
-    monkeypatch.setenv("LOGLENS_PROMETHEUS_ENABLED", "false")
+    monkeypatch.setenv("LOGSCRIBE_PROMETHEUS_ENABLED", "false")
 
-    with caplog.at_level(logging.INFO, logger="loglens_health_check"):
+    with caplog.at_level(logging.INFO, logger="logscribe_health_check"):
         run_health_checks()
 
     assert "Prometheus metrics server is disabled by configuration" in caplog.text
 
 
 def test_run_health_checks_reports_prometheus_check_failure(monkeypatch, caplog):
-    import loglens.metrics.prometheus as prometheus_module
+    import logscribe.metrics.prometheus as prometheus_module
 
     def boom():
         raise RuntimeError("metrics blew up")
 
     monkeypatch.setattr(prometheus_module, "get_metrics_instance", boom)
 
-    with caplog.at_level(logging.ERROR, logger="loglens_health_check"):
+    with caplog.at_level(logging.ERROR, logger="logscribe_health_check"):
         result = run_health_checks()
 
     assert result is False
@@ -170,7 +170,7 @@ def test_collect_health_status_reports_anthropic_sdk_missing(monkeypatch):
 
 
 def test_collect_health_status_never_imports_provider_sdks_eagerly(monkeypatch):
-    # Detecting sdk_missing must not defeat loglens's lazy-import contract:
+    # Detecting sdk_missing must not defeat logscribe's lazy-import contract:
     # calling collect_health_status() must not leave openai/anthropic in
     # sys.modules as a side effect of merely checking availability, beyond
     # what was already imported by the surrounding test session.
@@ -189,7 +189,7 @@ def test_collect_health_status_never_imports_provider_sdks_eagerly(monkeypatch):
 
 
 def test_collect_health_status_reports_metrics_disabled(monkeypatch):
-    monkeypatch.setenv("LOGLENS_PROMETHEUS_ENABLED", "false")
+    monkeypatch.setenv("LOGSCRIBE_PROMETHEUS_ENABLED", "false")
 
     status = collect_health_status()
 
@@ -197,7 +197,7 @@ def test_collect_health_status_reports_metrics_disabled(monkeypatch):
 
 
 def test_collect_health_status_reports_metrics_enabled(monkeypatch):
-    monkeypatch.setenv("LOGLENS_PROMETHEUS_ENABLED", "true")
+    monkeypatch.setenv("LOGSCRIBE_PROMETHEUS_ENABLED", "true")
 
     status = collect_health_status()
 
@@ -205,7 +205,7 @@ def test_collect_health_status_reports_metrics_enabled(monkeypatch):
 
 
 def test_collect_health_status_reports_metrics_sdk_missing(monkeypatch):
-    monkeypatch.setenv("LOGLENS_PROMETHEUS_ENABLED", "true")
+    monkeypatch.setenv("LOGSCRIBE_PROMETHEUS_ENABLED", "true")
     monkeypatch.setitem(sys.modules, "prometheus_client", None)
 
     status = collect_health_status()
@@ -220,7 +220,7 @@ def test_collect_health_status_reports_template_ok(monkeypatch):
 
 
 def test_collect_health_status_settings_failure_is_never_a_traceback(monkeypatch):
-    import loglens.config.settings as settings_module
+    import logscribe.config.settings as settings_module
 
     def boom():
         raise RuntimeError("settings blew up")
@@ -234,8 +234,8 @@ def test_collect_health_status_settings_failure_is_never_a_traceback(monkeypatch
 
 
 def test_main_json_prints_single_parseable_object_on_stdout(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check", "--json"])
-    monkeypatch.setenv("LOGLENS_PROVIDER", "anthropic")
+    monkeypatch.setattr("sys.argv", ["logscribe-check", "--json"])
+    monkeypatch.setenv("LOGSCRIBE_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     exit_code = main()
@@ -257,7 +257,7 @@ def test_main_json_prints_single_parseable_object_on_stdout(monkeypatch, capsys)
 
 
 def test_main_json_stdout_has_no_extra_output(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check", "--json"])
+    monkeypatch.setattr("sys.argv", ["logscribe-check", "--json"])
 
     main()
 
@@ -269,7 +269,7 @@ def test_main_json_stdout_has_no_extra_output(monkeypatch, capsys):
 
 
 def test_main_json_reflects_failure_state(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check", "--json"])
+    monkeypatch.setattr("sys.argv", ["logscribe-check", "--json"])
 
     exit_code = main()
 
@@ -281,7 +281,7 @@ def test_main_json_reflects_failure_state(monkeypatch, capsys):
 
 
 def test_main_human_mode_prints_check_lines_with_fix_hints(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check"])
+    monkeypatch.setattr("sys.argv", ["logscribe-check"])
 
     exit_code = main()
 
@@ -294,8 +294,8 @@ def test_main_human_mode_prints_check_lines_with_fix_hints(monkeypatch, capsys):
 
 
 def test_main_human_mode_marks_ok_provider_and_succeeds(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check"])
-    monkeypatch.setenv("LOGLENS_PROVIDER", "anthropic")
+    monkeypatch.setattr("sys.argv", ["logscribe-check"])
+    monkeypatch.setenv("LOGSCRIBE_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     exit_code = main()
@@ -306,7 +306,7 @@ def test_main_human_mode_marks_ok_provider_and_succeeds(monkeypatch, capsys):
 
 
 def test_main_human_mode_never_tracebacks_on_missing_key(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check"])
+    monkeypatch.setattr("sys.argv", ["logscribe-check"])
 
     main()
 
@@ -316,7 +316,7 @@ def test_main_human_mode_never_tracebacks_on_missing_key(monkeypatch, capsys):
 
 
 def test_main_json_mode_never_tracebacks_on_sdk_missing(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check", "--json"])
+    monkeypatch.setattr("sys.argv", ["logscribe-check", "--json"])
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setitem(sys.modules, "openai", None)
 
@@ -330,7 +330,7 @@ def test_main_json_mode_never_tracebacks_on_sdk_missing(monkeypatch, capsys):
 
 
 def test_main_human_mode_shows_sdk_missing_hint_for_provider(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check"])
+    monkeypatch.setattr("sys.argv", ["logscribe-check"])
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setitem(sys.modules, "openai", None)
 
@@ -344,8 +344,8 @@ def test_main_human_mode_shows_sdk_missing_hint_for_provider(monkeypatch, capsys
 
 
 def test_main_human_mode_shows_sdk_missing_hint_for_metrics(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["loglens-check"])
-    monkeypatch.setenv("LOGLENS_PROMETHEUS_ENABLED", "true")
+    monkeypatch.setattr("sys.argv", ["logscribe-check"])
+    monkeypatch.setenv("LOGSCRIBE_PROMETHEUS_ENABLED", "true")
     monkeypatch.setitem(sys.modules, "prometheus_client", None)
 
     main()
@@ -376,7 +376,7 @@ def test_human_output_glyphs_never_raise_on_narrow_encodings(monkeypatch, encoda
     # Windows consoles historically default to cp1252 and cannot encode
     # U+2705/U+274C. Whatever glyphs main() prints must survive an
     # encoding that cannot represent the emoji, without ever crashing.
-    monkeypatch.setattr("sys.argv", ["loglens-check"])
+    monkeypatch.setattr("sys.argv", ["logscribe-check"])
 
     class Stream:
         encoding = "utf-8" if encodable else "cp1252"
@@ -388,7 +388,7 @@ def test_human_output_glyphs_never_raise_on_narrow_encodings(monkeypatch, encoda
         def flush(self):
             pass
 
-    from loglens.cli import health_check as hc_module
+    from logscribe.cli import health_check as hc_module
 
     monkeypatch.setattr(hc_module.sys, "stdout", Stream())
     # Should not raise UnicodeEncodeError regardless of the stream's

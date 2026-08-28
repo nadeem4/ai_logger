@@ -1,15 +1,15 @@
-# loglens
+# logscribe
 
-**loglens — an AI lens on your logs. Batches your Python logs, scrubs PII, and asks an LLM what's going on.**
+**logscribe — an AI lens on your logs. Batches your Python logs, scrubs PII, and asks an LLM what's going on.**
 
-[![CI](https://github.com/nadeem4/loglens/actions/workflows/ci.yml/badge.svg)](https://github.com/nadeem4/loglens/actions/workflows/ci.yml)
+[![CI](https://github.com/nadeem4/logscribe/actions/workflows/ci.yml/badge.svg)](https://github.com/nadeem4/logscribe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Quickstart
 
 ```python
 import logging
-from loglens import AIHandler, get_async_logging_setup
+from logscribe import AIHandler, get_async_logging_setup
 
 logging.basicConfig(level=logging.INFO)  # AI responses log at INFO -- see note below
 
@@ -23,9 +23,9 @@ listener.stop()
 ai_handler.close()  # drains the buffer and blocks (bounded timeout) until the batch is sent
 ```
 
-`AIHandler` needs a provider API key to actually call an LLM — set `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY` and `LOGLENS_PROVIDER=anthropic`) in the environment first. Without a key, the snippet above still runs end-to-end (batching, PII scrubbing, prompt rendering) but `route_prompt()` returns `None` and nothing is sent anywhere — see [Configuration reference](#configuration-reference).
+`AIHandler` needs a provider API key to actually call an LLM — set `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY` and `LOGSCRIBE_PROVIDER=anthropic`) in the environment first. Without a key, the snippet above still runs end-to-end (batching, PII scrubbing, prompt rendering) but `route_prompt()` returns `None` and nothing is sent anywhere — see [Configuration reference](#configuration-reference).
 
-**The AI response is logged at `INFO` to the `loglens.ai_responses` logger, and is invisible unless that logger (or the root logger, as above) is enabled at `INFO` or lower** — with default logging config it's silently swallowed by root's default `WARNING` level. The `listener.stop()` / `ai_handler.close()` pair at the end is not optional either: without it, a script that isn't attached to a terminal (output redirected to a file, a container, a systemd unit, `python app.py > out.log`) can exit via `logging.shutdown()` before the background worker has dequeued and sent the batch, silently dropping it. With a working provider key, the last line of output looks like this:
+**The AI response is logged at `INFO` to the `logscribe.ai_responses` logger, and is invisible unless that logger (or the root logger, as above) is enabled at `INFO` or lower** — with default logging config it's silently swallowed by root's default `WARNING` level. The `listener.stop()` / `ai_handler.close()` pair at the end is not optional either: without it, a script that isn't attached to a terminal (output redirected to a file, a container, a systemd unit, `python app.py > out.log`) can exit via `logging.shutdown()` before the background worker has dequeued and sent the batch, silently dropping it. With a working provider key, the last line of output looks like this:
 
 ```
 2024-01-15 10:23:04,112 - AI_RESPONSE - Root cause: order 8812 timed out waiting on the payment gateway (3.2s). Suggested action: check gateway latency dashboards; consider raising the client timeout.
@@ -65,7 +65,7 @@ sequenceDiagram
     Provider-->>Router: response text
     Router-->>AIH: response
     AIH->>AIH: ai_response_callback(response)
-    Note over AIH: default: log to<br/>'loglens.ai_responses'
+    Note over AIH: default: log to<br/>'logscribe.ai_responses'
 ```
 
 `QueueHandler`/`QueueListener` move the work off the caller's thread; `AIHandler` itself also has its own internal background worker, so batching, PII scrubbing, prompt rendering, and the LLM call never block whatever thread called `logger.error(...)`, and a failing or slow provider never raises into the host application.
@@ -75,19 +75,19 @@ sequenceDiagram
 ## Installation
 
 ```bash
-pip install "loglens[openai]"       # OpenAI provider
-pip install "loglens[anthropic]"    # Anthropic provider
-pip install "loglens[metrics]"      # Prometheus metrics
-pip install "loglens[all]"          # openai + anthropic + metrics
+pip install "logscribe[openai]"       # OpenAI provider
+pip install "logscribe[anthropic]"    # Anthropic provider
+pip install "logscribe[metrics]"      # Prometheus metrics
+pip install "logscribe[all]"          # openai + anthropic + metrics
 ```
 
-The brackets must be quoted — on zsh (macOS's default shell since Catalina), an unquoted `pip install loglens[openai]` fails with `zsh: no matches found` because zsh treats `[...]` as a glob pattern.
+The brackets must be quoted — on zsh (macOS's default shell since Catalina), an unquoted `pip install logscribe[openai]` fails with `zsh: no matches found` because zsh treats `[...]` as a glob pattern.
 
 Core dependencies (`pydantic`, `pydantic-settings`, `Jinja2`) are always installed; the extras above are optional. Requires Python 3.10+.
 
 ## Configuration reference
 
-All settings are environment variables (a `.env` file in the working directory is also read), defined in `loglens/config/settings.py`. Provider API keys keep their conventional names rather than an `LOGLENS_` prefix:
+All settings are environment variables (a `.env` file in the working directory is also read), defined in `logscribe/config/settings.py`. Provider API keys keep their conventional names rather than an `LOGSCRIBE_` prefix:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -96,64 +96,64 @@ All settings are environment variables (a `.env` file in the working directory i
 
 | Variable | Default | Description |
 |---|---|---|
-| `LOGLENS_DEFAULT_LEVEL` | `INFO` | Default level for `AILogger` (`loglens.logger.AILogger`); read directly from the environment at import time, not through `get_settings()`. |
-| `LOGLENS_BATCH_SIZE` | `10` | Number of log records `AIHandler` buffers before flushing a batch. |
-| `LOGLENS_FLUSH_INTERVAL_SECONDS` | `5.0` | Seconds between periodic flushes, even if `LOGLENS_BATCH_SIZE` hasn't been reached. |
-| `LOGLENS_MAX_RETRIES` | `3` | Max retry attempts for a failing AI provider call. |
-| `LOGLENS_RETRY_BACKOFF_FACTOR` | `2.0` | Backoff multiplier for retries: sleep is `factor * 2^attempt` seconds. |
-| `LOGLENS_CB_FAILURE_THRESHOLD` | `3` | Consecutive failed batches before the circuit breaker opens. |
-| `LOGLENS_CB_RESET_TIMEOUT_SECONDS` | `60.0` | Seconds the breaker stays OPEN before allowing one HALF_OPEN trial call. |
-| `LOGLENS_PROVIDER` | `openai` | Which provider `LLMRouter` builds: `openai` or `anthropic`. |
-| `LOGLENS_FAST_MODEL` | `gpt-4o-mini` | Model used for the fast tier. If `LOGLENS_PROVIDER=anthropic` and this was never explicitly set, it defaults to `claude-3-5-haiku-latest` instead. |
-| `LOGLENS_CAPABLE_MODEL` | `gpt-4o` | Model used for the capable tier. If `LOGLENS_PROVIDER=anthropic` and this was never explicitly set, it defaults to `claude-sonnet-4-5` instead. |
-| `LOGLENS_CAPABLE_SEVERITY_THRESHOLD` | `ERROR` | Minimum log level (of the highest-severity record in a batch) that routes to the capable tier instead of the fast tier. |
-| `LOGLENS_JINJA_TEMPLATE_DIR` | *(none)* | Directory to load a custom Jinja2 prompt template from. Falls back to the packaged `templates/` directory. |
-| `LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME` | `default_log_prompt.jinja2` | Template filename to render the batch into a prompt. |
-| `LOGLENS_PII_RULES_JSON` | *(none)* | JSON array of custom PII scrubbing rules, added on top of the defaults. See [docs/PRIVACY.md](docs/PRIVACY.md). |
-| `LOGLENS_PII_USE_DEFAULT_RULES` | `true` | Set to `false` to disable the built-in email/IPv4/card-number rules. |
-| `LOGLENS_AI_RESPONSE_HANDLER_TYPE` | `LOG` | Declared for future non-`LOG` response handling (`CALLBACK`/`FILE`/`NONE`); today `AIHandler` always calls its response callback (default: log to `LOGLENS_AI_RESPONSE_LOG_LOGGER_NAME`) regardless of this value. |
-| `LOGLENS_AI_RESPONSE_LOG_LOGGER_NAME` | `loglens.ai_responses` | Logger name the default response callback logs AI responses to. |
-| `LOGLENS_AI_RESPONSE_FILE_PATH` | *(none)* | Declared but not currently consumed by any code path — there is no file-based response handler implemented yet. |
-| `LOGLENS_PROMETHEUS_ENABLED` | `true` | Whether to build real Prometheus metrics (requires the `metrics` extra) instead of no-op stand-ins. |
-| `LOGLENS_PROMETHEUS_PORT` | `9095` | Port for `start_prometheus_server_if_enabled()`. |
+| `LOGSCRIBE_DEFAULT_LEVEL` | `INFO` | Default level for `AILogger` (`logscribe.logger.AILogger`); read directly from the environment at import time, not through `get_settings()`. |
+| `LOGSCRIBE_BATCH_SIZE` | `10` | Number of log records `AIHandler` buffers before flushing a batch. |
+| `LOGSCRIBE_FLUSH_INTERVAL_SECONDS` | `5.0` | Seconds between periodic flushes, even if `LOGSCRIBE_BATCH_SIZE` hasn't been reached. |
+| `LOGSCRIBE_MAX_RETRIES` | `3` | Max retry attempts for a failing AI provider call. |
+| `LOGSCRIBE_RETRY_BACKOFF_FACTOR` | `2.0` | Backoff multiplier for retries: sleep is `factor * 2^attempt` seconds. |
+| `LOGSCRIBE_CB_FAILURE_THRESHOLD` | `3` | Consecutive failed batches before the circuit breaker opens. |
+| `LOGSCRIBE_CB_RESET_TIMEOUT_SECONDS` | `60.0` | Seconds the breaker stays OPEN before allowing one HALF_OPEN trial call. |
+| `LOGSCRIBE_PROVIDER` | `openai` | Which provider `LLMRouter` builds: `openai` or `anthropic`. |
+| `LOGSCRIBE_FAST_MODEL` | `gpt-4o-mini` | Model used for the fast tier. If `LOGSCRIBE_PROVIDER=anthropic` and this was never explicitly set, it defaults to `claude-3-5-haiku-latest` instead. |
+| `LOGSCRIBE_CAPABLE_MODEL` | `gpt-4o` | Model used for the capable tier. If `LOGSCRIBE_PROVIDER=anthropic` and this was never explicitly set, it defaults to `claude-sonnet-4-5` instead. |
+| `LOGSCRIBE_CAPABLE_SEVERITY_THRESHOLD` | `ERROR` | Minimum log level (of the highest-severity record in a batch) that routes to the capable tier instead of the fast tier. |
+| `LOGSCRIBE_JINJA_TEMPLATE_DIR` | *(none)* | Directory to load a custom Jinja2 prompt template from. Falls back to the packaged `templates/` directory. |
+| `LOGSCRIBE_JINJA_LOG_PROMPT_TEMPLATE_NAME` | `default_log_prompt.jinja2` | Template filename to render the batch into a prompt. |
+| `LOGSCRIBE_PII_RULES_JSON` | *(none)* | JSON array of custom PII scrubbing rules, added on top of the defaults. See [docs/PRIVACY.md](docs/PRIVACY.md). |
+| `LOGSCRIBE_PII_USE_DEFAULT_RULES` | `true` | Set to `false` to disable the built-in email/IPv4/card-number rules. |
+| `LOGSCRIBE_AI_RESPONSE_HANDLER_TYPE` | `LOG` | Declared for future non-`LOG` response handling (`CALLBACK`/`FILE`/`NONE`); today `AIHandler` always calls its response callback (default: log to `LOGSCRIBE_AI_RESPONSE_LOG_LOGGER_NAME`) regardless of this value. |
+| `LOGSCRIBE_AI_RESPONSE_LOG_LOGGER_NAME` | `logscribe.ai_responses` | Logger name the default response callback logs AI responses to. |
+| `LOGSCRIBE_AI_RESPONSE_FILE_PATH` | *(none)* | Declared but not currently consumed by any code path — there is no file-based response handler implemented yet. |
+| `LOGSCRIBE_PROMETHEUS_ENABLED` | `true` | Whether to build real Prometheus metrics (requires the `metrics` extra) instead of no-op stand-ins. |
+| `LOGSCRIBE_PROMETHEUS_PORT` | `9095` | Port for `start_prometheus_server_if_enabled()`. |
 
 ## Routing
 
-`LLMRouter` picks between two provider instances built from the same `LOGLENS_PROVIDER`: a **fast** one (`LOGLENS_FAST_MODEL`) and a **capable** one (`LOGLENS_CAPABLE_MODEL`). For each batch, it takes the highest-severity record's level and compares it against `LOGLENS_CAPABLE_SEVERITY_THRESHOLD` (default `ERROR`): at or above the threshold, the batch routes to the capable tier; below it, to the fast tier. If neither provider could be built (no key, or its SDK isn't installed), `route_prompt()` returns `None` and no call is made — the handler never raises.
+`LLMRouter` picks between two provider instances built from the same `LOGSCRIBE_PROVIDER`: a **fast** one (`LOGSCRIBE_FAST_MODEL`) and a **capable** one (`LOGSCRIBE_CAPABLE_MODEL`). For each batch, it takes the highest-severity record's level and compares it against `LOGSCRIBE_CAPABLE_SEVERITY_THRESHOLD` (default `ERROR`): at or above the threshold, the batch routes to the capable tier; below it, to the fast tier. If neither provider could be built (no key, or its SDK isn't installed), `route_prompt()` returns `None` and no call is made — the handler never raises.
 
 ## Metrics
 
-With the `metrics` extra installed and `LOGLENS_PROMETHEUS_ENABLED=true` (the default), `AIHandler` populates these Prometheus metrics (`loglens.metrics.prometheus`):
+With the `metrics` extra installed and `LOGSCRIBE_PROMETHEUS_ENABLED=true` (the default), `AIHandler` populates these Prometheus metrics (`logscribe.metrics.prometheus`):
 
 | Metric | Type | Labels |
 |---|---|---|
-| `loglens_handler_records_processed` | Counter | — |
-| `loglens_handler_batches_processed` | Counter | — |
-| `loglens_handler_batch_size_records` | Histogram | — |
-| `loglens_ai_calls` | Counter | `model`, `status` |
-| `loglens_ai_call_latency_seconds` | Histogram | `model` |
-| `loglens_ai_call_errors` | Counter | `model`, `error_type` |
-| `loglens_circuit_breaker_state_changes` | Counter | `model`, `new_state` |
-| `loglens_circuit_breaker_currently_open` | Gauge | `model` |
+| `logscribe_handler_records_processed` | Counter | — |
+| `logscribe_handler_batches_processed` | Counter | — |
+| `logscribe_handler_batch_size_records` | Histogram | — |
+| `logscribe_ai_calls` | Counter | `model`, `status` |
+| `logscribe_ai_call_latency_seconds` | Histogram | `model` |
+| `logscribe_ai_call_errors` | Counter | `model`, `error_type` |
+| `logscribe_circuit_breaker_state_changes` | Counter | `model`, `new_state` |
+| `logscribe_circuit_breaker_currently_open` | Gauge | `model` |
 
-Two further metrics are registered but not yet populated by any code path: `loglens_queue_depth_records` and `loglens_pii_scrubbed_fields`. Without the `metrics` extra (or with it disabled), `AIHandler` uses no-op stand-ins and none of this is exposed. Start the exporter with `start_prometheus_server_if_enabled()`.
+Two further metrics are registered but not yet populated by any code path: `logscribe_queue_depth_records` and `logscribe_pii_scrubbed_fields`. Without the `metrics` extra (or with it disabled), `AIHandler` uses no-op stand-ins and none of this is exposed. Start the exporter with `start_prometheus_server_if_enabled()`.
 
 ## When NOT to use it
 
-- **High-volume hot paths without sampling.** `AIHandler` makes roughly one LLM call per batch (`LOGLENS_BATCH_SIZE` records, or every `LOGLENS_FLUSH_INTERVAL_SECONDS`). A busy service logging thousands of records/sec will generate a matching volume of paid LLM calls unless you sample before attaching the handler or raise the handler's `level`.
+- **High-volume hot paths without sampling.** `AIHandler` makes roughly one LLM call per batch (`LOGSCRIBE_BATCH_SIZE` records, or every `LOGSCRIBE_FLUSH_INTERVAL_SECONDS`). A busy service logging thousands of records/sec will generate a matching volume of paid LLM calls unless you sample before attaching the handler or raise the handler's `level`.
 - **Regulated or highly sensitive data.** PII scrubbing is best-effort regex matching, not a compliance control — see [docs/PRIVACY.md](docs/PRIVACY.md).
 - **Cost-sensitive environments without a cap.** There is no built-in spend limit; every flushed batch that clears the circuit breaker is a real API call to your configured provider.
 
 ## Health check
 
 ```bash
-loglens-check          # human-readable ✅/❌ report
-loglens-check --json   # single-line JSON to stdout
+logscribe-check          # human-readable ✅/❌ report
+logscribe-check --json   # single-line JSON to stdout
 ```
 
-`ok` (and the `--json` field of the same name) means **AI logging will work with the currently configured provider** — it reflects only the provider named by `LOGLENS_PROVIDER`, since `LLMRouter` only ever builds that one provider and never falls back to the other at runtime. The `providers` object separately reports both `openai` and `anthropic` state (`ok` / `no_key` / `sdk_missing`) regardless of which one is selected, so you can see what switching `LOGLENS_PROVIDER` would give you.
+`ok` (and the `--json` field of the same name) means **AI logging will work with the currently configured provider** — it reflects only the provider named by `LOGSCRIBE_PROVIDER`, since `LLMRouter` only ever builds that one provider and never falls back to the other at runtime. The `providers` object separately reports both `openai` and `anthropic` state (`ok` / `no_key` / `sdk_missing`) regardless of which one is selected, so you can see what switching `LOGSCRIBE_PROVIDER` would give you.
 
-A provider's `"ok"` means its API key is present and its SDK is importable — **not** that the key has been verified. There is no `invalid_key` state and `loglens-check` makes no network call.
+A provider's `"ok"` means its API key is present and its SDK is importable — **not** that the key has been verified. There is no `invalid_key` state and `logscribe-check` makes no network call.
 
 Two more things to know about the output:
 

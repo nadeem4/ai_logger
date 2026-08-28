@@ -4,9 +4,9 @@ import sys
 import threading
 import time
 
-from loglens.config.settings import Settings
-from loglens.handlers.ai_handler import AIHandler
-from loglens.metrics.prometheus import AILoggingMetrics
+from logscribe.config.settings import Settings
+from logscribe.handlers.ai_handler import AIHandler
+from logscribe.metrics.prometheus import AILoggingMetrics
 
 
 class FakeRouter:
@@ -147,7 +147,7 @@ def test_post_close_emit_is_logged_not_silently_dropped(caplog):
     # logged instead.
     h = make_handler(batch_size=1, flush_interval=60)
     h.close()
-    with caplog.at_level(logging.WARNING, logger="loglens.handlers.ai_handler"):
+    with caplog.at_level(logging.WARNING, logger="logscribe.handlers.ai_handler"):
         h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "after close", None, None))
     assert not h.llm_router.calls, "router must not be called after the worker has exited"
     assert "no longer running" in caplog.text
@@ -197,9 +197,9 @@ def test_exception_traceback_reaches_the_prompt():
 def test_exception_traceback_reaches_the_prompt_via_fallback_template():
     # Same bug, second site: the inline fallback template used when the
     # configured template cannot be found.
-    from loglens.config.settings import Settings
+    from logscribe.config.settings import Settings
 
-    settings = Settings(loglens_jinja_log_prompt_template_name="definitely_not_there.jinja2")
+    settings = Settings(logscribe_jinja_log_prompt_template_name="definitely_not_there.jinja2")
     h = AIHandler(settings=settings, llm_router=FakeRouter(), batch_size=1, flush_interval=60)
     assert h.jinja_template.name is None, "expected the inline fallback template"
     try:
@@ -229,7 +229,7 @@ def test_none_router_response_is_not_reported_as_a_successful_call():
     # calls at sub-millisecond latency while making no calls at all.
     from prometheus_client import CollectorRegistry
 
-    from loglens.metrics.prometheus import AILoggingMetrics
+    from logscribe.metrics.prometheus import AILoggingMetrics
 
     class NoProviderRouter:
         def route_prompt(self, prompt, records):
@@ -249,17 +249,18 @@ def test_none_router_response_is_not_reported_as_a_successful_call():
 
     assert received == [], "callback must not be invoked when no AI call was made"
     assert (
-        registry.get_sample_value("loglens_ai_calls_total", {"model": "llm", "status": "success"})
+        registry.get_sample_value("logscribe_ai_calls_total", {"model": "llm", "status": "success"})
         is None
     ), "a None response must not be counted as a successful AI call"
     assert (
         registry.get_sample_value(
-            "loglens_ai_calls_total", {"model": "llm", "status": "no_provider"}
+            "logscribe_ai_calls_total", {"model": "llm", "status": "no_provider"}
         )
         == 1.0
     )
     assert (
-        registry.get_sample_value("loglens_ai_call_latency_seconds_count", {"model": "llm"}) is None
+        registry.get_sample_value("logscribe_ai_call_latency_seconds_count", {"model": "llm"})
+        is None
     ), "no latency may be observed for a call that never happened"
 
 
@@ -270,7 +271,7 @@ def test_handler_constructs_when_provider_sdk_is_missing(monkeypatch, caplog):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setitem(sys.modules, "openai", None)
 
-    with caplog.at_level(logging.WARNING, logger="loglens.router.llm_router"):
+    with caplog.at_level(logging.WARNING, logger="logscribe.router.llm_router"):
         h = AIHandler(batch_size=1, flush_interval=60)  # must not raise
     try:
         assert h.llm_router.fast is None and h.llm_router.capable is None
@@ -350,7 +351,7 @@ def test_close_racing_live_emit_never_loses_records_silently(caplog):
                 time.sleep(0.0005)
 
         threads = [threading.Thread(target=produce) for _ in range(producers)]
-        with caplog.at_level(logging.WARNING, logger="loglens.handlers.ai_handler"):
+        with caplog.at_level(logging.WARNING, logger="logscribe.handlers.ai_handler"):
             for t in threads:
                 t.start()
             started.wait(2)
@@ -413,8 +414,8 @@ def test_custom_jinja_template_dir_overrides_packaged_templates(tmp_path):
         "CUSTOM PROMPT ({{ logs|length }} logs)", encoding="utf-8"
     )
     settings = Settings(
-        loglens_jinja_template_dir=str(template_dir),
-        loglens_jinja_log_prompt_template_name="custom_prompt.jinja2",
+        logscribe_jinja_template_dir=str(template_dir),
+        logscribe_jinja_log_prompt_template_name="custom_prompt.jinja2",
     )
     h = AIHandler(settings=settings, llm_router=FakeRouter(), batch_size=1, flush_interval=60)
     try:
@@ -428,7 +429,7 @@ def test_custom_jinja_template_dir_overrides_packaged_templates(tmp_path):
 
 def test_default_ai_response_logger_writes_to_named_logger(caplog):
     h = make_handler(batch_size=1, flush_interval=60)  # uses the default callback
-    logger_name = h.settings.loglens_ai_response_log_logger_name
+    logger_name = h.settings.logscribe_ai_response_log_logger_name
     with caplog.at_level(logging.INFO, logger=logger_name):
         h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "hi", None, None))
         h.close()
@@ -490,7 +491,7 @@ def test_circuit_breaker_short_circuits_further_batches_once_open():
             self.calls += 1
             raise RuntimeError("down")
 
-    settings = Settings(loglens_cb_failure_threshold=1, loglens_cb_reset_timeout_seconds=60)
+    settings = Settings(logscribe_cb_failure_threshold=1, logscribe_cb_reset_timeout_seconds=60)
     router = AlwaysFailRouter()
     metrics = AILoggingMetrics()
     h = AIHandler(
@@ -530,7 +531,7 @@ def test_worker_loop_logs_and_survives_a_processing_exception(caplog):
         raise RuntimeError("scrub explode")
 
     h = make_handler(pii_scrubber=bad_scrubber, batch_size=1, flush_interval=60)
-    with caplog.at_level(logging.ERROR, logger="loglens.handlers.ai_handler"):
+    with caplog.at_level(logging.ERROR, logger="logscribe.handlers.ai_handler"):
         h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None))
     h.close()
     assert h.llm_router.calls == []
@@ -556,7 +557,7 @@ def test_worker_loop_survives_a_non_exception_base_exception_and_keeps_going(cap
     h = make_handler(
         llm_router=router, pii_scrubber=flaky_scrubber, batch_size=1, flush_interval=60
     )
-    with caplog.at_level(logging.ERROR, logger="loglens.handlers.ai_handler"):
+    with caplog.at_level(logging.ERROR, logger="logscribe.handlers.ai_handler"):
         h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "first", None, None))
         h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "second", None, None))
     h.close()

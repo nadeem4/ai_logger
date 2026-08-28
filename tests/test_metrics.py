@@ -4,10 +4,10 @@ import sys
 
 import pytest
 
-from loglens.config.settings import Settings
-from loglens.handlers.ai_handler import AIHandler
-from loglens.metrics import prometheus as prometheus_module
-from loglens.metrics.prometheus import AILoggingMetrics, _NoopMetric
+from logscribe.config.settings import Settings
+from logscribe.handlers.ai_handler import AIHandler
+from logscribe.metrics import prometheus as prometheus_module
+from logscribe.metrics.prometheus import AILoggingMetrics, _NoopMetric
 
 
 def _free_port() -> int:
@@ -44,7 +44,7 @@ def test_real_metrics_labeled_counter_readback():
     metrics.ai_calls_total.labels(model="llm", status="success").inc()
 
     assert (
-        registry.get_sample_value("loglens_ai_calls_total", {"model": "llm", "status": "success"})
+        registry.get_sample_value("logscribe_ai_calls_total", {"model": "llm", "status": "success"})
         == 1.0
     )
 
@@ -67,7 +67,7 @@ def test_handler_integration_records_processed_counter():
 
     h.close()  # deterministic: close() drains and joins the worker
     assert len(h.llm_router.calls) == 1
-    assert registry.get_sample_value("loglens_handler_records_processed_total") == 3.0
+    assert registry.get_sample_value("logscribe_handler_records_processed_total") == 3.0
 
 
 def test_noop_metrics_fallback_when_prometheus_client_unimportable(monkeypatch):
@@ -89,11 +89,11 @@ def test_noop_metrics_fallback_when_prometheus_client_unimportable(monkeypatch):
 
 def test_disabled_by_settings_uses_noop_metrics():
     # The second (and separately spec'd, item 7) way into the no-op branch:
-    # prometheus_client is importable, but loglens_prometheus_enabled is
+    # prometheus_client is importable, but logscribe_prometheus_enabled is
     # False. Built via a Settings instance directly (consistent with how
     # AILoggingMetrics is built elsewhere in this file, and simpler than
     # round-tripping through the get_settings() singleton + monkeypatch env).
-    settings = Settings(loglens_prometheus_enabled=False)
+    settings = Settings(logscribe_prometheus_enabled=False)
     metrics = AILoggingMetrics(settings=settings)
 
     # These must really be no-ops, not real Counters/Histograms/Gauges.
@@ -132,28 +132,28 @@ def test_two_default_instances_get_distinct_registries():
 
     assert (
         metrics_a.registry.get_sample_value(
-            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
+            "logscribe_ai_calls_total", {"model": "llm", "status": "success"}
         )
         == 1.0
     )
     assert (
         metrics_b.registry.get_sample_value(
-            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
+            "logscribe_ai_calls_total", {"model": "llm", "status": "success"}
         )
         == 1.0
     )
 
 
 def test_start_prometheus_server_disabled_by_settings(caplog):
-    settings = Settings(loglens_prometheus_enabled=False)
-    with caplog.at_level(logging.INFO, logger="loglens.metrics.prometheus"):
+    settings = Settings(logscribe_prometheus_enabled=False)
+    with caplog.at_level(logging.INFO, logger="logscribe.metrics.prometheus"):
         prometheus_module.start_prometheus_server_if_enabled(settings)
     assert "disabled by configuration" in caplog.text
 
 
 def test_start_prometheus_server_starts_and_is_idempotent(caplog):
-    settings = Settings(loglens_prometheus_enabled=True, loglens_prometheus_port=_free_port())
-    with caplog.at_level(logging.DEBUG, logger="loglens.metrics.prometheus"):
+    settings = Settings(logscribe_prometheus_enabled=True, logscribe_prometheus_port=_free_port())
+    with caplog.at_level(logging.DEBUG, logger="logscribe.metrics.prometheus"):
         prometheus_module.start_prometheus_server_if_enabled(settings)
         assert prometheus_module._prometheus_server_started_flag is True
         # A second call must not attempt to bind the port again -- it should
@@ -172,8 +172,8 @@ def test_start_prometheus_server_reports_port_already_in_use(caplog):
     port = blocking_socket.getsockname()[1]
     blocking_socket.listen(1)
     try:
-        settings = Settings(loglens_prometheus_enabled=True, loglens_prometheus_port=port)
-        with caplog.at_level(logging.DEBUG, logger="loglens.metrics.prometheus"):
+        settings = Settings(logscribe_prometheus_enabled=True, logscribe_prometheus_port=port)
+        with caplog.at_level(logging.DEBUG, logger="logscribe.metrics.prometheus"):
             prometheus_module.start_prometheus_server_if_enabled(settings)
         assert "Port might be in use" in caplog.text
         assert prometheus_module._prometheus_server_started_flag is False
@@ -183,8 +183,8 @@ def test_start_prometheus_server_reports_port_already_in_use(caplog):
 
 def test_start_prometheus_server_handles_missing_prometheus_client(monkeypatch, caplog):
     monkeypatch.setitem(sys.modules, "prometheus_client", None)
-    settings = Settings(loglens_prometheus_enabled=True, loglens_prometheus_port=_free_port())
-    with caplog.at_level(logging.WARNING, logger="loglens.metrics.prometheus"):
+    settings = Settings(logscribe_prometheus_enabled=True, logscribe_prometheus_port=_free_port())
+    with caplog.at_level(logging.WARNING, logger="logscribe.metrics.prometheus"):
         prometheus_module.start_prometheus_server_if_enabled(settings)
     assert "prometheus_client not installed" in caplog.text
     assert prometheus_module._prometheus_server_started_flag is False
@@ -195,8 +195,8 @@ def test_start_prometheus_server_handles_unexpected_error(monkeypatch, caplog):
         raise RuntimeError("metrics singleton exploded")
 
     monkeypatch.setattr(prometheus_module, "get_metrics_instance", boom)
-    settings = Settings(loglens_prometheus_enabled=True, loglens_prometheus_port=_free_port())
-    with caplog.at_level(logging.ERROR, logger="loglens.metrics.prometheus"):
+    settings = Settings(logscribe_prometheus_enabled=True, logscribe_prometheus_port=_free_port())
+    with caplog.at_level(logging.ERROR, logger="logscribe.metrics.prometheus"):
         prometheus_module.start_prometheus_server_if_enabled(settings)
     assert "unexpected error occurred while starting Prometheus server" in caplog.text
     assert prometheus_module._prometheus_server_started_flag is False

@@ -1,6 +1,6 @@
 import re
 
-from loglens.utils.pii_filter import (
+from logscribe.utils.pii_filter import (
     compile_rules,
     scrub_pii_from_dict,
     scrub_text,
@@ -8,13 +8,13 @@ from loglens.utils.pii_filter import (
 
 
 def test_module_imports():
-    from loglens.utils import pii_filter  # currently raises NameError: Optional
+    from logscribe.utils import pii_filter  # currently raises NameError: Optional
 
     assert hasattr(pii_filter, "scrub_pii_from_dict")
 
 
 def test_scrubs_email():
-    from loglens.utils.pii_filter import scrub_pii_from_dict
+    from logscribe.utils.pii_filter import scrub_pii_from_dict
 
     out = scrub_pii_from_dict({"msg": "contact alice@example.com now"})
     assert out["msg"] == "contact [REDACTED_EMAIL] now"

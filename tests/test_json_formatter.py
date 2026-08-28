@@ -1,7 +1,7 @@
 import json
 import logging
 
-from loglens.utils.json_formatter import JsonFormatter
+from logscribe.utils.json_formatter import JsonFormatter
 
 
 def make_record(msg="hello", level=logging.INFO, exc_info=None):

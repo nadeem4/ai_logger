@@ -7,7 +7,7 @@ or that crash instead of behaving as documented.
 
 examples/fastapi_middleware.py is deliberately excluded from every test
 below except the blanket py_compile check: fastapi/uvicorn are not a
-loglens dependency in any extra, so importing it would fail in every CI
+logscribe dependency in any extra, so importing it would fail in every CI
 environment. Its header comment carries the install/run commands instead;
 its runtime correctness is unverified here by design (see the module
 docstring).
@@ -41,7 +41,7 @@ def _load_example(name: str) -> types.ModuleType:
     "__main__":` guard (or a `main()`/`demo_*()` function the test calls
     explicitly), so importing alone never starts a background thread."""
     path = EXAMPLES_DIR / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(f"loglens_examples_under_test.{name}", path)
+    spec = importlib.util.spec_from_file_location(f"logscribe_examples_under_test.{name}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -79,7 +79,7 @@ def test_found_expected_example_files():
 
 def test_fastapi_middleware_documents_install_and_run_commands():
     text = (EXAMPLES_DIR / "fastapi_middleware.py").read_text(encoding="utf-8")
-    assert 'pip install "loglens[openai]" fastapi uvicorn' in text
+    assert 'pip install "logscribe[openai]" fastapi uvicorn' in text
     assert "uvicorn examples.fastapi_middleware:app" in text
 
 
@@ -102,7 +102,7 @@ def test_basic_usage_exits_1_without_api_key(capsys):
 
 def test_basic_usage_runs_end_to_end_with_a_fake_provider(monkeypatch, capsys):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("LOGLENS_FLUSH_INTERVAL_SECONDS", "0.2")
+    monkeypatch.setenv("LOGSCRIBE_FLUSH_INTERVAL_SECONDS", "0.2")
 
     calls = []
 
@@ -110,10 +110,10 @@ def test_basic_usage_runs_end_to_end_with_a_fake_provider(monkeypatch, capsys):
         calls.append((prompt, records))
         return "fake AI analysis"
 
-    monkeypatch.setattr("loglens.router.llm_router.LLMRouter.route_prompt", fake_route_prompt)
+    monkeypatch.setattr("logscribe.router.llm_router.LLMRouter.route_prompt", fake_route_prompt)
 
     # AIHandler's default response callback lazily adds a plain
-    # logging.StreamHandler() to 'loglens.ai_responses' the first time it's
+    # logging.StreamHandler() to 'logscribe.ai_responses' the first time it's
     # used, and only if that logger has no handler yet -- it binds
     # `stream=sys.stderr` at construction time and never rebinds. If some
     # earlier test in the suite already triggered that (this is a
@@ -122,7 +122,7 @@ def test_basic_usage_runs_end_to_end_with_a_fake_provider(monkeypatch, capsys):
     # capsys-patched one, and the assertion below would see nothing.
     # Clearing handlers first forces a fresh one bound to *this* test's
     # capsys stderr, regardless of what ran before it.
-    ai_response_logger = logging.getLogger("loglens.ai_responses")
+    ai_response_logger = logging.getLogger("logscribe.ai_responses")
     ai_response_logger.handlers.clear()
 
     module = _load_example("basic_usage")
@@ -150,7 +150,7 @@ def test_custom_pii_rules_scrubs_order_id_both_ways(monkeypatch):
         calls.append(prompt)
         return None
 
-    monkeypatch.setattr("loglens.router.llm_router.LLMRouter.route_prompt", fake_route_prompt)
+    monkeypatch.setattr("logscribe.router.llm_router.LLMRouter.route_prompt", fake_route_prompt)
 
     module = _load_example("custom_pii_rules")
     module.main()
@@ -182,7 +182,7 @@ def test_custom_prompt_template_loads_and_renders_incident_template(monkeypatch,
         calls.append(prompt)
         return None
 
-    monkeypatch.setattr("loglens.router.llm_router.LLMRouter.route_prompt", fake_route_prompt)
+    monkeypatch.setattr("logscribe.router.llm_router.LLMRouter.route_prompt", fake_route_prompt)
 
     module = _load_example("custom_prompt_template")
     module.main()
@@ -195,19 +195,21 @@ def test_custom_prompt_template_loads_and_renders_incident_template(monkeypatch,
     assert "SUGGESTED ACTION:" in calls[0]
 
 
-# --- LOGLENS_PII_RULES_JSON is a real setting, sanity-checked directly --
+# --- LOGSCRIBE_PII_RULES_JSON is a real setting, sanity-checked directly --
 
 
-def test_loglens_pii_rules_json_env_var_is_a_real_setting(monkeypatch):
-    from loglens.config.settings import get_settings, reset_settings
+def test_logscribe_pii_rules_json_env_var_is_a_real_setting(monkeypatch):
+    from logscribe.config.settings import get_settings, reset_settings
 
     monkeypatch.setenv(
-        "LOGLENS_PII_RULES_JSON",
+        "LOGSCRIBE_PII_RULES_JSON",
         json.dumps([{"name": "x", "regex": "x", "replacement": "y"}]),
     )
     reset_settings()
     try:
         settings = get_settings()
-        assert settings.loglens_pii_rules_json == [{"name": "x", "regex": "x", "replacement": "y"}]
+        assert settings.logscribe_pii_rules_json == [
+            {"name": "x", "regex": "x", "replacement": "y"}
+        ]
     finally:
         reset_settings()

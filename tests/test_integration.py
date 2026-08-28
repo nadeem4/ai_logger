@@ -1,8 +1,8 @@
 import logging
 import time
 
-from loglens import AIHandler, get_async_logging_setup
-from loglens.router.llm_router import LLMRouter
+from logscribe import AIHandler, get_async_logging_setup
+from logscribe.router.llm_router import LLMRouter
 
 
 class CapturingProvider:

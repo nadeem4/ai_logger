@@ -1,4 +1,4 @@
-# This file marks loglens as a package.
+# This file marks logscribe as a package.
 
 # Expose key components for easier import
 from .config import Settings, get_settings
@@ -22,12 +22,12 @@ __all__ = [
     "start_prometheus_server_if_enabled",
 ]
 
-# Version of the loglens package, single-sourced from installed package metadata
+# Version of the logscribe package, single-sourced from installed package metadata
 # (which reads it from pyproject.toml).
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
 try:
-    __version__ = _pkg_version("loglens")
+    __version__ = _pkg_version("logscribe")
 except PackageNotFoundError:  # running from a source checkout without install
     __version__ = "0.0.0.dev0"

@@ -2,9 +2,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from loglens.providers.anthropic_provider import AnthropicProvider
-from loglens.providers.base import ProviderError
-from loglens.providers.openai_provider import OpenAIProvider
+from logscribe.providers.anthropic_provider import AnthropicProvider
+from logscribe.providers.base import ProviderError
+from logscribe.providers.openai_provider import OpenAIProvider
 
 
 def test_openai_provider_calls_chat_completions():

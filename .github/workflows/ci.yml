@@ -21,7 +21,7 @@ jobs:
       - run: pip install ruff==0.16.5 mypy==2.3.1 ".[all]"
       - run: ruff check .
       - run: ruff format --check .
-      - run: mypy loglens
+      - run: mypy logscribe
 
   test:
     runs-on: ${{ matrix.os }}
@@ -39,4 +39,4 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: pip install -e ".[dev]"
-      - run: pytest --cov=loglens --cov-fail-under=80 --cov-report=term
+      - run: pytest --cov=logscribe --cov-fail-under=80 --cov-report=term

@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """
-    Configuration settings for the LogLens package.
+    Configuration settings for the LogScribe package.
     Settings are loaded from environment variables.
     """
 
@@ -18,83 +18,89 @@ class Settings(BaseSettings):
     )
 
     # --- AILogger Core Settings ---
-    loglens_default_level: str = Field(default="INFO", validation_alias="LOGLENS_DEFAULT_LEVEL")
+    logscribe_default_level: str = Field(default="INFO", validation_alias="LOGSCRIBE_DEFAULT_LEVEL")
 
     # --- AIHandler Batching & Flushing ---
-    loglens_batch_size: int = Field(default=10, gt=0, validation_alias="LOGLENS_BATCH_SIZE")
-    loglens_flush_interval_seconds: float = Field(
-        default=5.0, gt=0, validation_alias="LOGLENS_FLUSH_INTERVAL_SECONDS"
+    logscribe_batch_size: int = Field(default=10, gt=0, validation_alias="LOGSCRIBE_BATCH_SIZE")
+    logscribe_flush_interval_seconds: float = Field(
+        default=5.0, gt=0, validation_alias="LOGSCRIBE_FLUSH_INTERVAL_SECONDS"
     )
 
     # --- AIHandler Retry & Circuit Breaker ---
-    loglens_max_retries: int = Field(default=3, ge=0, validation_alias="LOGLENS_MAX_RETRIES")
-    loglens_retry_backoff_factor: float = Field(
-        default=2.0, ge=0, validation_alias="LOGLENS_RETRY_BACKOFF_FACTOR"
+    logscribe_max_retries: int = Field(default=3, ge=0, validation_alias="LOGSCRIBE_MAX_RETRIES")
+    logscribe_retry_backoff_factor: float = Field(
+        default=2.0, ge=0, validation_alias="LOGSCRIBE_RETRY_BACKOFF_FACTOR"
     )
-    loglens_cb_failure_threshold: int = Field(
-        default=3, gt=0, validation_alias="LOGLENS_CB_FAILURE_THRESHOLD"
+    logscribe_cb_failure_threshold: int = Field(
+        default=3, gt=0, validation_alias="LOGSCRIBE_CB_FAILURE_THRESHOLD"
     )
-    loglens_cb_reset_timeout_seconds: float = Field(
-        default=60.0, gt=0, validation_alias="LOGLENS_CB_RESET_TIMEOUT_SECONDS"
+    logscribe_cb_reset_timeout_seconds: float = Field(
+        default=60.0, gt=0, validation_alias="LOGSCRIBE_CB_RESET_TIMEOUT_SECONDS"
     )
 
     # --- LLM Provider & Model Configuration ---
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
-    loglens_provider: str = Field(
-        default="openai", validation_alias="LOGLENS_PROVIDER"
+    logscribe_provider: str = Field(
+        default="openai", validation_alias="LOGSCRIBE_PROVIDER"
     )  # openai|anthropic
-    loglens_fast_model: str = Field(default="gpt-4o-mini", validation_alias="LOGLENS_FAST_MODEL")
-    loglens_capable_model: str = Field(default="gpt-4o", validation_alias="LOGLENS_CAPABLE_MODEL")
+    logscribe_fast_model: str = Field(
+        default="gpt-4o-mini", validation_alias="LOGSCRIBE_FAST_MODEL"
+    )
+    logscribe_capable_model: str = Field(
+        default="gpt-4o", validation_alias="LOGSCRIBE_CAPABLE_MODEL"
+    )
     # Threshold for routing to the capable (more expensive) model
-    loglens_capable_severity_threshold: str = Field(
-        default="ERROR", validation_alias="LOGLENS_CAPABLE_SEVERITY_THRESHOLD"
+    logscribe_capable_severity_threshold: str = Field(
+        default="ERROR", validation_alias="LOGSCRIBE_CAPABLE_SEVERITY_THRESHOLD"
     )
 
     # --- Jinja2 Templating ---
-    loglens_jinja_template_dir: str | None = Field(
-        default=None, validation_alias="LOGLENS_JINJA_TEMPLATE_DIR"
+    logscribe_jinja_template_dir: str | None = Field(
+        default=None, validation_alias="LOGSCRIBE_JINJA_TEMPLATE_DIR"
     )  # Path to custom templates
-    loglens_jinja_log_prompt_template_name: str = Field(
+    logscribe_jinja_log_prompt_template_name: str = Field(
         default="default_log_prompt.jinja2",
-        validation_alias="LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME",
+        validation_alias="LOGSCRIBE_JINJA_LOG_PROMPT_TEMPLATE_NAME",
     )
 
     # --- PII Scrubbing ---
     # Rules can be provided as a JSON string in an environment variable
     # Example: '[{"name": "custom_rule", "regex": "\\d+", "replacement": "[NUM]"}]'
-    loglens_pii_rules_json: Json[list[dict[str, str]]] | None = Field(
-        default=None, validation_alias="LOGLENS_PII_RULES_JSON"
+    logscribe_pii_rules_json: Json[list[dict[str, str]]] | None = Field(
+        default=None, validation_alias="LOGSCRIBE_PII_RULES_JSON"
     )
-    loglens_pii_use_default_rules: bool = Field(
-        default=True, validation_alias="LOGLENS_PII_USE_DEFAULT_RULES"
+    logscribe_pii_use_default_rules: bool = Field(
+        default=True, validation_alias="LOGSCRIBE_PII_USE_DEFAULT_RULES"
     )
 
     # --- AI Response Handling ---
     # 'LOG' (to a separate logger), 'CALLBACK', 'FILE', 'NONE'
-    loglens_ai_response_handler_type: str = Field(
-        default="LOG", validation_alias="LOGLENS_AI_RESPONSE_HANDLER_TYPE"
+    logscribe_ai_response_handler_type: str = Field(
+        default="LOG", validation_alias="LOGSCRIBE_AI_RESPONSE_HANDLER_TYPE"
     )
-    loglens_ai_response_log_logger_name: str = Field(
-        default="loglens.ai_responses", validation_alias="LOGLENS_AI_RESPONSE_LOG_LOGGER_NAME"
+    logscribe_ai_response_log_logger_name: str = Field(
+        default="logscribe.ai_responses", validation_alias="LOGSCRIBE_AI_RESPONSE_LOG_LOGGER_NAME"
     )
-    loglens_ai_response_file_path: str | None = Field(
-        default=None, validation_alias="LOGLENS_AI_RESPONSE_FILE_PATH"
+    logscribe_ai_response_file_path: str | None = Field(
+        default=None, validation_alias="LOGSCRIBE_AI_RESPONSE_FILE_PATH"
     )
     # For CALLBACK type, the application would need to register a callback function.
 
     # --- Prometheus Metrics ---
-    loglens_prometheus_enabled: bool = Field(
-        default=True, validation_alias="LOGLENS_PROMETHEUS_ENABLED"
+    logscribe_prometheus_enabled: bool = Field(
+        default=True, validation_alias="LOGSCRIBE_PROMETHEUS_ENABLED"
     )
-    loglens_prometheus_port: int = Field(
-        default=9095, gt=1023, lt=65536, validation_alias="LOGLENS_PROMETHEUS_PORT"
+    logscribe_prometheus_port: int = Field(
+        default=9095, gt=1023, lt=65536, validation_alias="LOGSCRIBE_PROMETHEUS_PORT"
     )  # Common port for app metrics
 
     # --- LangChain Specific (if any beyond model names) ---
     # e.g., specific chain configurations, if not handled by LLMRouter internally
 
-    @field_validator("loglens_default_level", "loglens_capable_severity_threshold", mode="before")
+    @field_validator(
+        "logscribe_default_level", "logscribe_capable_severity_threshold", mode="before"
+    )
     @classmethod
     def validate_log_level_names(cls, value: str) -> str:
         """Validates that log level strings are valid."""
@@ -105,7 +111,7 @@ class Settings(BaseSettings):
             return upper_value
         raise ValueError(f"Log level name must be a string, got {type(value)}")
 
-    @field_validator("loglens_pii_rules_json", mode="before")
+    @field_validator("logscribe_pii_rules_json", mode="before")
     @classmethod
     def parse_pii_rules_json_string(cls, value: Any) -> Any:
         """Allows PII rules to be passed as a JSON string that Pydantic can then parse."""
