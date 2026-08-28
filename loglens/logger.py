@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Union
 
 # Placeholder for future configuration loading
 # from .config.settings import get_settings
@@ -20,7 +19,7 @@ class AILogger(logging.Logger):
     default logger class using logging.setLoggerClass(AILogger).
     """
 
-    def __init__(self, name: str, level: Union[int, str] = AI_LOGGER_DEFAULT_LEVEL) -> None:
+    def __init__(self, name: str, level: int | str = AI_LOGGER_DEFAULT_LEVEL) -> None:
         """
         Initialize the AILogger.
         Args:

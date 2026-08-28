@@ -2,7 +2,8 @@ import logging
 import queue
 import threading
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 import jinja2
 
@@ -28,14 +29,14 @@ class AIHandler(logging.Handler):
     def __init__(
         self,
         level: int = logging.NOTSET,
-        batch_size: Optional[int] = None,
-        flush_interval: Optional[float] = None,
-        max_retries: Optional[int] = None,
-        retry_backoff_factor: Optional[float] = None,
+        batch_size: int | None = None,
+        flush_interval: float | None = None,
+        max_retries: int | None = None,
+        retry_backoff_factor: float | None = None,
         settings=None,
         llm_router=None,
         pii_scrubber=None,
-        ai_response_callback: Optional[Callable[[Any], None]] = None,
+        ai_response_callback: Callable[[Any], None] | None = None,
     ) -> None:
         super().__init__(level)
         self.settings = settings or get_settings()
@@ -68,7 +69,7 @@ class AIHandler(logging.Handler):
         self._buffer_lock = threading.Lock()
         self._last_flush_time = time.time()
 
-        self._flush_timer: Optional[threading.Timer] = None
+        self._flush_timer: threading.Timer | None = None
         self._closed = False
         self._closed_lock = threading.Lock()
 

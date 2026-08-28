@@ -1,5 +1,5 @@
 import threading
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import Field, Json, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     )
 
     # --- LLM Provider & Model Configuration ---
-    openai_api_key: Optional[str] = Field(default=None, validation_alias="OPENAI_API_KEY")
-    anthropic_api_key: Optional[str] = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
+    anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
     loglens_provider: str = Field(
         default="openai", validation_alias="LOGLENS_PROVIDER"
     )  # openai|anthropic
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     )
 
     # --- Jinja2 Templating ---
-    loglens_jinja_template_dir: Optional[str] = Field(
+    loglens_jinja_template_dir: str | None = Field(
         default=None, validation_alias="LOGLENS_JINJA_TEMPLATE_DIR"
     )  # Path to custom templates
     loglens_jinja_log_prompt_template_name: str = Field(
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     # --- PII Scrubbing ---
     # Rules can be provided as a JSON string in an environment variable
     # Example: '[{"name": "custom_rule", "regex": "\\d+", "replacement": "[NUM]"}]'
-    loglens_pii_rules_json: Optional[Json[list[dict[str, str]]]] = Field(
+    loglens_pii_rules_json: Json[list[dict[str, str]]] | None = Field(
         default=None, validation_alias="LOGLENS_PII_RULES_JSON"
     )
     loglens_pii_use_default_rules: bool = Field(
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     loglens_ai_response_log_logger_name: str = Field(
         default="loglens.ai_responses", validation_alias="LOGLENS_AI_RESPONSE_LOG_LOGGER_NAME"
     )
-    loglens_ai_response_file_path: Optional[str] = Field(
+    loglens_ai_response_file_path: str | None = Field(
         default=None, validation_alias="LOGLENS_AI_RESPONSE_FILE_PATH"
     )
     # For CALLBACK type, the application would need to register a callback function.
@@ -120,7 +120,7 @@ class Settings(BaseSettings):
 
 # --- Singleton Instance ---
 # This makes it easy to access settings from anywhere in the package.
-_settings_instance: Optional[Settings] = None
+_settings_instance: Settings | None = None
 _settings_lock = threading.Lock()
 
 

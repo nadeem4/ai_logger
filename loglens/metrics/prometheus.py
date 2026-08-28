@@ -1,7 +1,6 @@
 import logging
 import threading
 import types
-from typing import Optional
 
 from ..config.settings import Settings, get_settings
 
@@ -35,15 +34,15 @@ class AILoggingMetrics:
     stand-ins. The choice is made once, at construction time.
     """
 
-    def __init__(self, settings: Optional[Settings] = None, registry=None):
+    def __init__(self, settings: Settings | None = None, registry=None):
         self.settings = settings or get_settings()
 
-        # Typed as Optional[ModuleType] (not left to infer as `None`) so that
+        # Typed as ModuleType | None (not left to infer as `None`) so that
         # a successful `import ... as real_metrics_module` below is a valid
         # rebind rather than a type conflict, and so the `is not None` check
         # narrows it for the real-metrics branch instead of it statically
         # remaining `None`.
-        real_metrics_module: Optional[types.ModuleType] = None
+        real_metrics_module: types.ModuleType | None = None
         if self.settings.loglens_prometheus_enabled:
             try:
                 import prometheus_client as real_metrics_module
@@ -154,7 +153,7 @@ class AILoggingMetrics:
 
 
 # --- Singleton Instance ---
-_metrics_instance: Optional[AILoggingMetrics] = None
+_metrics_instance: AILoggingMetrics | None = None
 _metrics_lock = threading.Lock()
 
 
@@ -173,7 +172,7 @@ _prometheus_server_started_flag = False
 _prometheus_server_lock = threading.Lock()
 
 
-def start_prometheus_server_if_enabled(settings: Optional[Settings] = None) -> None:
+def start_prometheus_server_if_enabled(settings: Settings | None = None) -> None:
     """
     Starts the Prometheus HTTP server if enabled in settings and not already started.
     This should typically be called once at application startup.

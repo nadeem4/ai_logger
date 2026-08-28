@@ -1,4 +1,4 @@
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from .base import LLMProvider, ProviderError
 
@@ -23,7 +23,7 @@ class AnthropicProvider(LLMProvider):
         self,
         model: str,
         api_key: str,
-        client: Optional[_AnthropicClientLike] = None,
+        client: _AnthropicClientLike | None = None,
         max_tokens: int = 1024,
     ):
         self.model = model

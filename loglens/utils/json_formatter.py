@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 
 class JsonFormatter(logging.Formatter):
@@ -11,8 +11,8 @@ class JsonFormatter(logging.Formatter):
 
     def __init__(
         self,
-        fmt: Optional[dict[str, str]] = None,
-        datefmt: Optional[str] = None,
+        fmt: dict[str, str] | None = None,
+        datefmt: str | None = None,
         style: str = "%",
         ensure_ascii: bool = False,
         default_json_serializer: Any = str,  # Handles non-serializable objects
@@ -22,10 +22,10 @@ class JsonFormatter(logging.Formatter):
         Initialize the JsonFormatter.
 
         Args:
-            fmt (Optional[Dict[str, str]]): A dictionary mapping LogRecord attribute names
+            fmt (dict[str, str] | None): A dictionary mapping LogRecord attribute names
                 to the desired keys in the JSON output. If None, uses default keys.
                 Example: {"levelname": "level", "message": "msg"}
-            datefmt (Optional[str]): Date format string, as used by time.strftime.
+            datefmt (str | None): Date format string, as used by time.strftime.
             style (str): '%' or '{' or '$'.
             ensure_ascii (bool): If True, all non-ASCII characters in the output are
                 escaped with \uXXXX sequences.

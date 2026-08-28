@@ -1,4 +1,4 @@
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from .base import LLMProvider, ProviderError
 
@@ -17,7 +17,7 @@ class _OpenAIClientLike(Protocol):
 
 
 class OpenAIProvider(LLMProvider):
-    def __init__(self, model: str, api_key: str, client: Optional[_OpenAIClientLike] = None):
+    def __init__(self, model: str, api_key: str, client: _OpenAIClientLike | None = None):
         self.model = model
         if client is None:
             try:

@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from ..config.settings import Settings, get_settings
 from ..providers.base import LLMProvider, ProviderError
@@ -27,9 +27,9 @@ class LLMRouter:
 
     def __init__(
         self,
-        settings: Optional[Settings] = None,
-        fast: Optional[LLMProvider] = None,
-        capable: Optional[LLMProvider] = None,
+        settings: Settings | None = None,
+        fast: LLMProvider | None = None,
+        capable: LLMProvider | None = None,
     ):
         self.settings = settings or get_settings()
         self._warned_no_providers = False
@@ -112,7 +112,7 @@ class LLMRouter:
             )
             self._warned_no_providers = True
 
-    def route_prompt(self, prompt: str, log_records: list[dict[str, Any]]) -> Optional[str]:
+    def route_prompt(self, prompt: str, log_records: list[dict[str, Any]]) -> str | None:
         """
         Routes a prompt to the capable or fast provider based on the highest
         severity in log_records, and returns the provider's response.
@@ -137,7 +137,7 @@ class LLMRouter:
         # of this method (fast/capable not both None) guarantees a provider
         # is found by the time we fall through to `else`. Expressed as an
         # explicit None-check below rather than asserted away.
-        provider: Optional[LLMProvider]
+        provider: LLMProvider | None
         if highest_severity >= threshold and self.capable is not None:
             provider = self.capable
         elif self.fast is not None:

@@ -1,7 +1,7 @@
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from re import Pattern
-from typing import Any, Callable, Optional, Union
+from typing import Any
 
 # --- Default PII Scrubbing Rules ---
 # Each rule is a dictionary with 'name', 'regex', and 'replacement'
@@ -12,7 +12,7 @@ from typing import Any, Callable, Optional, Union
 # while `dict`/`list` are invariant. That lets callers pass narrower types --
 # e.g. Settings' parsed `list[dict[str, str]]` PII rules, which never carry a
 # Pattern or callable replacement -- without a spurious variance mismatch.
-RuleValue = Union[str, Pattern, Callable]
+RuleValue = str | Pattern | Callable
 Rule = Mapping[str, RuleValue]
 
 DEFAULT_PII_RULES: list[dict[str, RuleValue]] = [
@@ -85,7 +85,7 @@ def scrub_text(text: str, compiled_rules: Sequence[Rule]) -> str:
 
 def scrub_pii_from_dict(
     data: dict[str, Any],
-    custom_rules: Optional[Sequence[Rule]] = None,
+    custom_rules: Sequence[Rule] | None = None,
     use_default_rules: bool = True,
     max_depth: int = 10,  # Max recursion depth to prevent infinite loops
 ) -> dict[str, Any]:

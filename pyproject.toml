@@ -7,7 +7,7 @@ name = "loglens"
 version = "0.1.0"
 description = "AI-powered log analysis for Python logging: batch, scrub PII, and route logs to an LLM for insights."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "Nadeem Khan", email = "nadeem4.nk13@gmail.com"}]
 keywords = ["logging", "ai", "llm", "observability", "pii", "prometheus", "openai", "anthropic"]
@@ -17,7 +17,6 @@ classifiers = [
   "Topic :: System :: Logging",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -27,7 +26,7 @@ classifiers = [
 ]
 dependencies = [
   "pydantic>=2.0,<3",
-  "pydantic-settings>=2.0,<3",
+  "pydantic-settings>=2.12,<3",
   "Jinja2>=3.0,<4",
 ]
 
@@ -37,7 +36,7 @@ anthropic = ["anthropic>=0.30"]
 metrics = ["prometheus-client>=0.19"]
 local = ["transformers>=4.30", "torch>=2.0"]
 all = ["loglens[openai,anthropic,metrics]"]
-dev = ["pytest>=8", "pytest-cov", "ruff==0.16.5", "mypy==2.3.1; python_version >= '3.10'", "build", "pre-commit", "loglens[all]"]
+dev = ["pytest>=8", "pytest-cov", "ruff==0.16.5", "mypy==2.3.1", "build", "pre-commit", "loglens[all]"]
 
 [project.urls]
 Homepage = "https://github.com/nadeem4/loglens"
@@ -59,7 +58,7 @@ addopts = "-ra -q"
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 # ruff format's markdown support reformats fenced Python code blocks in-place;
 # exclude README.md from formatting only so its prose/examples stay untouched
 # (Task 1 constraint). Linting (`ruff check`) never applied to Markdown, so
@@ -71,8 +70,6 @@ select = ["E", "F", "W", "I", "UP"]
 ignore = ["E501"]
 
 [tool.mypy]
-# No python_version pin: mypy 2.x refuses anything below 3.10 and silently
-# falls back to its own default, so pinning 3.9 here would be a no-op that
-# asserts a guarantee it doesn't provide. 3.9 syntax gating is handled by
-# [tool.ruff]'s target-version = "py39" instead.
+# Matches requires-python's floor.
+python_version = "3.10"
 ignore_missing_imports = true
