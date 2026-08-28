@@ -161,15 +161,14 @@ This will:
 
 (Placeholder for development setup, running tests, contributing guidelines)
 
-*   Install development dependencies: `pip install -r requirements-dev.txt` (if such a file exists).
-*   Run tests: `pytest` (tests are yet to be written).
+*   Install development dependencies: `pip install -e ".[dev]"`.
+*   Run tests: `pytest`.
 
 ## Future Enhancements
 
 *   Support for more LLM providers and local model types.
 *   Advanced PII detection rules and techniques.
 *   Callback mechanisms for AI responses.
-*   Comprehensive test suite.
 *   Detailed documentation for each module.
 
 ## License

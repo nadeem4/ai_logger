@@ -162,18 +162,13 @@ def run_health_checks():
 def main():
     parser = argparse.ArgumentParser(description="Health check for the LogLens package.")
     # Add any arguments if needed in the future, e.g., --verbose
-    args = parser.parse_args()
+    parser.parse_args()
 
     if run_health_checks():
-        # Optionally, exit with code 0 for success
-        # import sys
-        # sys.exit(0)
-        pass
+        return 0
     else:
-        # Optionally, exit with code 1 for failure
-        # import sys
-        # sys.exit(1)
-        pass
+        return 1
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())
