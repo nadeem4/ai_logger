@@ -31,10 +31,12 @@ def run_health_checks():
         # Print a few key settings for verification
         cli_logger.info(f"  Default Log Level: {settings.ai_logging_default_level}")
         cli_logger.info(f"  Batch Size: {settings.ai_logging_batch_size}")
+        cli_logger.info(f"  Provider: {settings.ai_logging_provider}")
+        cli_logger.info(f"  Fast Model: {settings.ai_logging_fast_model}")
+        cli_logger.info(f"  Capable Model: {settings.ai_logging_capable_model}")
+        cli_logger.info(f"  Capable Severity Threshold: {settings.ai_logging_capable_severity_threshold}")
         cli_logger.info(f"  OpenAI API Key Set: {'Yes' if settings.openai_api_key else 'No'}")
-        cli_logger.info(f"  Enable Local Model: {settings.ai_logging_enable_local_model}")
-        if settings.ai_logging_enable_local_model:
-            cli_logger.info(f"  Local Model Name/Path: {settings.ai_logging_local_model_name_or_path}")
+        cli_logger.info(f"  Anthropic API Key Set: {'Yes' if settings.anthropic_api_key else 'No'}")
         cli_logger.info(f"  Prometheus Enabled: {settings.ai_logging_prometheus_enabled}")
         if settings.ai_logging_prometheus_enabled:
             cli_logger.info(f"  Prometheus Port: {settings.ai_logging_prometheus_port}")
@@ -55,14 +57,20 @@ def run_health_checks():
         
         router = LLMRouter(settings=settings)
         cli_logger.info("LLMRouter initialized.")
-        
-        available_models = list(router.llms.keys())
-        if available_models:
-            cli_logger.info(f"  Available LLM clients in router: {', '.join(available_models)}")
-            if not settings.openai_api_key and ("gpt4" in available_models or "gpt35" in available_models) :
-                 cli_logger.warning("  OpenAI models are listed but OPENAI_API_KEY is not set. They might not function.")
+
+        cli_logger.info(f"  Configured provider: {settings.ai_logging_provider}")
+        cli_logger.info(f"  Fast model: {settings.ai_logging_fast_model}")
+        cli_logger.info(f"  Capable model: {settings.ai_logging_capable_model}")
+        cli_logger.info(f"  Capable severity threshold: {settings.ai_logging_capable_severity_threshold}")
+
+        if router.fast is not None or router.capable is not None:
+            cli_logger.info("  LLM providers are configured and available.")
         else:
-            cli_logger.warning("  No LLM clients were initialized in the LLMRouter. AI functionality will be limited.")
+            key_name = "ANTHROPIC_API_KEY" if settings.ai_logging_provider == "anthropic" else "OPENAI_API_KEY"
+            cli_logger.warning(
+                f"  No LLM providers were initialized in the LLMRouter ({key_name} not set). "
+                "AI functionality will be limited."
+            )
             all_checks_ok = False # Depending on strictness, this could be a failure
 
     except Exception as e:

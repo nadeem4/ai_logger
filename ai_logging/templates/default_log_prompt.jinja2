@@ -8,7 +8,7 @@
     - pathname
     - funcName
     - lineno
-    - exception (if any)
+    - exception_info (if any)
     - stack_info (if any)
     - extras (if any)
 #}
@@ -24,9 +24,9 @@ Level:     {{ log_entry.levelname }}
 Logger:    {{ log_entry.name }}
 Message:   {{ log_entry.message }}
 {% if log_entry.pathname %}Source:    {{ log_entry.pathname }}:{{ log_entry.lineno }} (in {{ log_entry.funcName }}){% endif %}
-{% if log_entry.exception %}
+{% if log_entry.exception_info %}
 Exception Info:
-{{ log_entry.exception|indent(2, true) }}
+{{ log_entry.exception_info|indent(2, true) }}
 {% endif %}
 {% if log_entry.stack_info %}
 Stack Info:

@@ -1,7 +1,8 @@
 import os
+import threading
 from typing import List, Optional, Dict, Any, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, validator, Json
+from pydantic import Field, field_validator, Json
 
 # --- Helper Functions (if any, e.g., for parsing complex env vars) ---
 
@@ -22,20 +23,17 @@ class Settings(BaseSettings):
     # --- AIHandler Retry & Circuit Breaker ---
     ai_logging_max_retries: int = Field(default=3, ge=0, validation_alias="AI_LOGGING_MAX_RETRIES")
     ai_logging_retry_backoff_factor: float = Field(default=2.0, ge=0, validation_alias="AI_LOGGING_RETRY_BACKOFF_FACTOR")
-    # TODO: Add circuit breaker specific settings (e.g., fail_threshold, reset_timeout)
+    ai_logging_cb_failure_threshold: int = Field(default=3, gt=0, validation_alias="AI_LOGGING_CB_FAILURE_THRESHOLD")
+    ai_logging_cb_reset_timeout_seconds: float = Field(default=60.0, gt=0, validation_alias="AI_LOGGING_CB_RESET_TIMEOUT_SECONDS")
 
-    # --- OpenAI API & Model Configuration ---
+    # --- LLM Provider & Model Configuration ---
     openai_api_key: Optional[str] = Field(default=None, validation_alias="OPENAI_API_KEY")
-    ai_logging_gpt4_model_name: str = Field(default="gpt-4", validation_alias="AI_LOGGING_GPT4_MODEL_NAME")
-    ai_logging_gpt35_model_name: str = Field(default="gpt-3.5-turbo", validation_alias="AI_LOGGING_GPT35_MODEL_NAME")
-    # Example: Threshold for routing to more expensive model like GPT-4
-    ai_logging_gpt4_severity_threshold: str = Field(default="ERROR", validation_alias="AI_LOGGING_GPT4_SEVERITY_THRESHOLD") # e.g., ERROR, CRITICAL
-
-    # --- Local HuggingFace Model Configuration ---
-    ai_logging_enable_local_model: bool = Field(default=False, validation_alias="AI_LOGGING_ENABLE_LOCAL_MODEL")
-    ai_logging_local_model_name_or_path: str = Field(default="distilgpt2", validation_alias="AI_LOGGING_LOCAL_MODEL_NAME_OR_PATH")
-    # Example: Threshold for routing to local model (e.g., if OpenAI fails or for lower severity)
-    ai_logging_local_model_severity_threshold: str = Field(default="DEBUG", validation_alias="AI_LOGGING_LOCAL_MODEL_SEVERITY_THRESHOLD")
+    anthropic_api_key: Optional[str] = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    ai_logging_provider: str = Field(default="openai", validation_alias="AI_LOGGING_PROVIDER")  # openai|anthropic
+    ai_logging_fast_model: str = Field(default="gpt-4o-mini", validation_alias="AI_LOGGING_FAST_MODEL")
+    ai_logging_capable_model: str = Field(default="gpt-4o", validation_alias="AI_LOGGING_CAPABLE_MODEL")
+    # Threshold for routing to the capable (more expensive) model
+    ai_logging_capable_severity_threshold: str = Field(default="ERROR", validation_alias="AI_LOGGING_CAPABLE_SEVERITY_THRESHOLD")
 
     # --- Jinja2 Templating ---
     ai_logging_jinja_template_dir: Optional[str] = Field(default=None, validation_alias="AI_LOGGING_JINJA_TEMPLATE_DIR") # Path to custom templates
@@ -61,7 +59,8 @@ class Settings(BaseSettings):
     # --- LangChain Specific (if any beyond model names) ---
     # e.g., specific chain configurations, if not handled by LLMRouter internally
 
-    @validator("ai_logging_default_level", "ai_logging_gpt4_severity_threshold", "ai_logging_local_model_severity_threshold", pre=True, allow_reuse=True)
+    @field_validator("ai_logging_default_level", "ai_logging_capable_severity_threshold", mode="before")
+    @classmethod
     def validate_log_level_names(cls, value: str) -> str:
         """Validates that log level strings are valid."""
         if isinstance(value, str):
@@ -71,7 +70,8 @@ class Settings(BaseSettings):
             return upper_value
         raise ValueError(f"Log level name must be a string, got {type(value)}")
 
-    @validator("ai_logging_pii_rules_json", pre=True, allow_reuse=True)
+    @field_validator("ai_logging_pii_rules_json", mode="before")
+    @classmethod
     def parse_pii_rules_json_string(cls, value: Any) -> Any:
         """Allows PII rules to be passed as a JSON string that Pydantic can then parse."""
         if isinstance(value, str):
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
 # --- Singleton Instance ---
 # This makes it easy to access settings from anywhere in the package.
 _settings_instance: Optional[Settings] = None
-_settings_lock = object() # Using a simple object for lock, could use threading.Lock if needed for complex init
+_settings_lock = threading.Lock()
 
 def get_settings() -> Settings:
     """
@@ -94,13 +94,15 @@ def get_settings() -> Settings:
     """
     global _settings_instance
     if _settings_instance is None:
-        # In a multithreaded context, a lock might be needed here for thread-safe singleton creation,
-        # though Python module imports are generally thread-safe. Pydantic's BaseSettings instantiation
-        # itself should be safe.
         with _settings_lock: # Basic lock to prevent re-entry if used in threads before instance is set
             if _settings_instance is None: # Double-check locking pattern
                  _settings_instance = Settings()
     return _settings_instance
+
+def reset_settings() -> None:
+    """Clear the cached Settings singleton (primarily for tests)."""
+    global _settings_instance
+    _settings_instance = None
 
 if __name__ == "__main__":
     # Example of how to use and test the settings
@@ -117,8 +119,9 @@ if __name__ == "__main__":
         print(f"Default Log Level: {settings.ai_logging_default_level}")
         print(f"OpenAI API Key: {'********' if settings.openai_api_key else 'Not set'}")
         print(f"Batch Size: {settings.ai_logging_batch_size}")
-        print(f"GPT-4 Model: {settings.ai_logging_gpt4_model_name}")
-        print(f"Enable Local Model: {settings.ai_logging_enable_local_model}")
+        print(f"Provider: {settings.ai_logging_provider}")
+        print(f"Fast Model: {settings.ai_logging_fast_model}")
+        print(f"Capable Model: {settings.ai_logging_capable_model}")
         print(f"Prometheus Enabled: {settings.ai_logging_prometheus_enabled}")
         print(f"Prometheus Port: {settings.ai_logging_prometheus_port}")
 

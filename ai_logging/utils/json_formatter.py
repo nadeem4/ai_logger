@@ -17,7 +17,7 @@ class JsonFormatter(logging.Formatter):
                  ensure_ascii: bool = False,
                  default_json_serializer: Any = str, # Handles non-serializable objects
                  **kwargs: Any):
-        """
+        r"""
         Initialize the JsonFormatter.
 
         Args:
