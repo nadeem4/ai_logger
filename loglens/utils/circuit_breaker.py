@@ -6,9 +6,10 @@ failures. Callers are responsible for wiring it up to whatever
 they're protecting (an HTTP call, an LLM router, etc.) and for
 emitting their own metrics/logs on state changes.
 """
+
 import threading
 import time
-from typing import Callable
+from collections.abc import Callable
 
 
 class CircuitBreaker:

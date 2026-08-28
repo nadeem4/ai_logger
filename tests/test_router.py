@@ -1,30 +1,46 @@
 import logging
+
 from loglens.router.llm_router import LLMRouter
 
+
 class Fake:
-    def __init__(self, name): self.model = name; self.prompts = []
-    def complete(self, p): self.prompts.append(p); return f"resp-{self.model}"
+    def __init__(self, name):
+        self.model = name
+        self.prompts = []
+
+    def complete(self, p):
+        self.prompts.append(p)
+        return f"resp-{self.model}"
+
 
 def test_error_batch_routes_to_capable():
     r = LLMRouter(fast=Fake("fast"), capable=Fake("capable"))
     out = r.route_prompt("p", [{"levelno": logging.ERROR}])
     assert out == "resp-capable"
 
+
 def test_info_batch_routes_to_fast():
     r = LLMRouter(fast=Fake("fast"), capable=Fake("capable"))
     assert r.route_prompt("p", [{"levelno": logging.INFO}]) == "resp-fast"
+
 
 def test_no_providers_returns_none():
     r = LLMRouter(fast=None, capable=None)
     assert r.route_prompt("p", [{"levelno": logging.INFO}]) is None
 
+
 def test_provider_error_propagates_for_handler_retry():
     from loglens.providers.base import ProviderError
+
     class Boom:
         model = "x"
-        def complete(self, p): raise ProviderError("down")
+
+        def complete(self, p):
+            raise ProviderError("down")
+
     r = LLMRouter(fast=Boom(), capable=Boom())
     import pytest
+
     with pytest.raises(ProviderError):
         r.route_prompt("p", [{"levelno": logging.INFO}])
 
@@ -39,8 +55,10 @@ def test_provider_error_propagates_for_handler_retry():
 # client builds a real anthropic.Anthropic client object but makes no
 # network call — .complete() is never invoked on it below.
 
+
 def test_anthropic_defaults_used_when_not_overridden(monkeypatch):
     from loglens.providers.anthropic_provider import AnthropicProvider
+
     monkeypatch.setenv("LOGLENS_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 

@@ -2,7 +2,7 @@ import importlib
 
 import pytest
 
-from loglens.config.settings import get_settings, reset_settings
+from loglens.config.settings import Settings, get_settings, reset_settings
 
 
 def test_defaults_load_with_no_env():
@@ -30,3 +30,25 @@ def test_settings_module_import_raises_no_deprecation_warning():
     import loglens.config.settings as settings_module
 
     importlib.reload(settings_module)
+
+
+def test_non_string_log_level_raises():
+    # mode="before" validators see the raw constructor value, so a
+    # directly-constructed Settings() (bypassing env-var string coercion)
+    # can hand the validator a non-string value.
+    with pytest.raises(Exception, match="must be a string"):
+        Settings(loglens_default_level=123)
+
+
+def test_pii_rules_json_string_is_parsed_into_rule_list():
+    settings = Settings(
+        loglens_pii_rules_json='[{"name": "order", "regex": "ORD-\\\\d+", "replacement": "[ORDER]"}]'
+    )
+    assert settings.loglens_pii_rules_json == [
+        {"name": "order", "regex": "ORD-\\d+", "replacement": "[ORDER]"}
+    ]
+
+
+def test_pii_rules_json_wrong_type_raises():
+    with pytest.raises(Exception, match="JSON string or a list of dicts"):
+        Settings(loglens_pii_rules_json=123)

@@ -1,12 +1,22 @@
-import logging, queue, sys, threading, time
+import logging
+import queue
+import sys
+import threading
+import time
+
+from loglens.config.settings import Settings
 from loglens.handlers.ai_handler import AIHandler
+from loglens.metrics.prometheus import AILoggingMetrics
+
 
 class FakeRouter:
     def __init__(self):
         self.calls = []
+
     def route_prompt(self, prompt, records):
         self.calls.append((prompt, records))
         return "ok"
+
 
 def make_handler(**kw):
     kw.setdefault("llm_router", FakeRouter())
@@ -14,20 +24,27 @@ def make_handler(**kw):
     kw.setdefault("flush_interval", 0.2)
     return AIHandler(**kw)
 
+
 def test_timed_flush_does_not_deadlock():
     h = make_handler()
     rec = logging.LogRecord("t", logging.INFO, "f", 1, "hi", None, None)
     h.emit(rec)
     done = threading.Event()
+
     def wait_for_flush():
         deadline = time.time() + 3
         while time.time() < deadline:
             if h.llm_router.calls:
-                done.set(); return
+                done.set()
+                return
             time.sleep(0.05)
-    t = threading.Thread(target=wait_for_flush, daemon=True); t.start(); t.join(4)
+
+    t = threading.Thread(target=wait_for_flush, daemon=True)
+    t.start()
+    t.join(4)
     h.close()
     assert done.is_set(), "timed flush deadlocked or never fired"
+
 
 def test_batch_size_triggers_flush():
     h = make_handler(batch_size=3, flush_interval=60)
@@ -38,11 +55,13 @@ def test_batch_size_triggers_flush():
     prompt, records = h.llm_router.calls[0]
     assert len(records) == 3
 
+
 def test_close_drains_buffer():
     h = make_handler(batch_size=100, flush_interval=60)
     h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "last", None, None))
     h.close()
     assert len(h.llm_router.calls) == 1
+
 
 def test_router_exception_never_propagates_to_caller():
     # Also restores the coverage lost when processing moved to the worker
@@ -51,15 +70,20 @@ def test_router_exception_never_propagates_to_caller():
     class BoomRouter:
         def __init__(self):
             self.calls = 0
+
         def route_prompt(self, p, r):
             self.calls += 1
             raise RuntimeError("api down")
+
     router = BoomRouter()
     h = make_handler(llm_router=router, batch_size=1, flush_interval=60, max_retries=0)
     h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "x", None, None))  # must not raise
-    h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "y", None, None))  # worker must have survived
+    h.emit(
+        logging.LogRecord("t", logging.ERROR, "f", 1, "y", None, None)
+    )  # worker must have survived
     h.close()  # deterministic: close() drains and joins the worker
     assert router.calls == 2, "a batch that raises must not kill the worker thread"
+
 
 def test_pii_scrubbed_before_prompt():
     h = make_handler(batch_size=1, flush_interval=60)
@@ -69,12 +93,14 @@ def test_pii_scrubbed_before_prompt():
     assert "bob@x.io" not in prompt
     assert "[REDACTED_EMAIL]" in prompt
 
+
 def test_retry_loop_single_failure_does_not_sleep():
     # Covers the brief's "verify a single failure doesn't sleep" requirement
     # against the real retry-loop code path.
     class BoomRouter:
         def __init__(self):
             self.call_count = 0
+
         def route_prompt(self, p, r):
             self.call_count += 1
             raise RuntimeError("api down")
@@ -102,8 +128,12 @@ def test_ai_response_callback_invoked_on_success():
 
 def test_emit_returns_fast_even_when_provider_is_slow():
     import time
+
     class SlowRouter:
-        def route_prompt(self, p, r): time.sleep(1.5); return "ok"
+        def route_prompt(self, p, r):
+            time.sleep(1.5)
+            return "ok"
+
     h = make_handler(llm_router=SlowRouter(), batch_size=1, flush_interval=60)
     t0 = time.time()
     h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None))
@@ -128,7 +158,7 @@ def test_close_stops_flush_timer_permanently():
     # _timed_flush (i.e. past the point where close()'s cancel() would be a
     # no-op) to reproduce the self-re-arming-timer-on-a-closed-handler bug.
     h = make_handler(batch_size=100, flush_interval=60)
-    barrier = threading.Barrier(2)
+    barrier = threading.Barrier(2, timeout=5)
 
     def fire_timed_flush():
         barrier.wait()
@@ -219,9 +249,7 @@ def test_none_router_response_is_not_reported_as_a_successful_call():
 
     assert received == [], "callback must not be invoked when no AI call was made"
     assert (
-        registry.get_sample_value(
-            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
-        )
+        registry.get_sample_value("loglens_ai_calls_total", {"model": "llm", "status": "success"})
         is None
     ), "a None response must not be counted as a successful AI call"
     assert (
@@ -231,10 +259,7 @@ def test_none_router_response_is_not_reported_as_a_successful_call():
         == 1.0
     )
     assert (
-        registry.get_sample_value(
-            "loglens_ai_call_latency_seconds_count", {"model": "llm"}
-        )
-        is None
+        registry.get_sample_value("loglens_ai_call_latency_seconds_count", {"model": "llm"}) is None
     ), "no latency may be observed for a call that never happened"
 
 
@@ -332,6 +357,7 @@ def test_close_racing_live_emit_never_loses_records_silently(caplog):
             h.close()  # races the still-running producers
             for t in threads:
                 t.join(5)
+                assert not t.is_alive()
 
         received = sum(len(records) for _, records in router.calls)
         still_buffered = len(h._buffer)
@@ -351,6 +377,188 @@ def test_close_racing_live_emit_never_loses_records_silently(caplog):
         )
         if left_in_queue:
             assert "still queued" in caplog.text, (
-                f"{left_in_queue} record(s) were left queued at close() with "
-                "nothing logged"
+                f"{left_in_queue} record(s) were left queued at close() with nothing logged"
             )
+
+
+def test_emit_never_raises_and_delegates_to_handle_error(monkeypatch):
+    h = make_handler(batch_size=100, flush_interval=60)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("metrics broke")
+
+    monkeypatch.setattr(h.metrics.ai_handler_records_processed_total, "inc", boom)
+    handled = []
+    monkeypatch.setattr(h, "handleError", lambda record: handled.append(record))
+
+    rec = logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None)
+    h.emit(rec)  # must not raise into the caller
+    h.close()
+
+    assert handled == [rec]
+
+
+def test_close_is_idempotent_when_called_twice():
+    h = make_handler(batch_size=1, flush_interval=60)
+    h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None))
+    h.close()
+    h.close()  # must not raise, hang, or re-process the batch
+    assert len(h.llm_router.calls) == 1
+
+
+def test_custom_jinja_template_dir_overrides_packaged_templates(tmp_path):
+    template_dir = tmp_path / "templates"
+    template_dir.mkdir()
+    (template_dir / "custom_prompt.jinja2").write_text(
+        "CUSTOM PROMPT ({{ logs|length }} logs)", encoding="utf-8"
+    )
+    settings = Settings(
+        loglens_jinja_template_dir=str(template_dir),
+        loglens_jinja_log_prompt_template_name="custom_prompt.jinja2",
+    )
+    h = AIHandler(settings=settings, llm_router=FakeRouter(), batch_size=1, flush_interval=60)
+    try:
+        assert h.jinja_template.name == "custom_prompt.jinja2"
+        h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "hi", None, None))
+    finally:
+        h.close()
+    prompt, _ = h.llm_router.calls[0]
+    assert prompt == "CUSTOM PROMPT (1 logs)"
+
+
+def test_default_ai_response_logger_writes_to_named_logger(caplog):
+    h = make_handler(batch_size=1, flush_interval=60)  # uses the default callback
+    logger_name = h.settings.loglens_ai_response_log_logger_name
+    with caplog.at_level(logging.INFO, logger=logger_name):
+        h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "hi", None, None))
+        h.close()
+    assert "ok" in caplog.text
+
+
+def test_process_batch_is_a_noop_for_an_empty_batch():
+    h = make_handler(batch_size=1, flush_interval=60)
+    h._process_batch([])  # must not raise, must not touch the router
+    h.close()
+    assert h.llm_router.calls == []
+
+
+def test_prepare_record_for_processing_falls_back_when_output_is_not_json():
+    # If the configured formatter's output can't be parsed back as JSON,
+    # prepare_record_for_processing() must still hand back a usable dict
+    # instead of raising out of the worker thread.
+    h = make_handler(batch_size=1, flush_interval=60)
+    h.formatter = logging.Formatter("%(message)s")  # plain text, not JSON
+    rec = logging.LogRecord("t", logging.WARNING, "f", 1, "plain text output", None, None)
+    data = h.prepare_record_for_processing(rec)
+    h.close()
+    assert data["message"] == "plain text output"
+    assert data["levelname"] == "WARNING"
+
+
+def test_retry_backs_off_between_attempts_and_stops_at_max_retries():
+    class AlwaysFailRouter:
+        def __init__(self):
+            self.calls = 0
+
+        def route_prompt(self, p, r):
+            self.calls += 1
+            raise RuntimeError("down")
+
+    router = AlwaysFailRouter()
+    h = make_handler(
+        llm_router=router,
+        batch_size=1,
+        flush_interval=60,
+        max_retries=2,
+        retry_backoff_factor=0.01,
+    )
+    start = time.time()
+    h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "x", None, None))
+    h.close()
+    elapsed = time.time() - start
+    assert router.calls == 3, "max_retries=2 must mean 3 total attempts"
+    # backoff = 0.01 * (2**0 + 2**1) = 0.03s between the 3 attempts.
+    assert elapsed >= 0.03, f"retries must back off between attempts (took {elapsed:.3f}s)"
+
+
+def test_circuit_breaker_short_circuits_further_batches_once_open():
+    class AlwaysFailRouter:
+        def __init__(self):
+            self.calls = 0
+
+        def route_prompt(self, p, r):
+            self.calls += 1
+            raise RuntimeError("down")
+
+    settings = Settings(loglens_cb_failure_threshold=1, loglens_cb_reset_timeout_seconds=60)
+    router = AlwaysFailRouter()
+    metrics = AILoggingMetrics()
+    h = AIHandler(
+        settings=settings,
+        llm_router=router,
+        batch_size=1,
+        flush_interval=60,
+        max_retries=0,
+    )
+    h.metrics = metrics
+    h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "first", None, None))  # trips the breaker
+    h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "second", None, None))  # short-circuited
+    h.close()
+    assert router.calls == 1, "an open circuit breaker must prevent further router calls"
+    assert h.circuit_breaker.state == "OPEN"
+
+
+def test_jinja_render_error_falls_back_to_a_summary_prompt():
+    class ExplodingTemplate:
+        name = "broken"
+
+        def render(self, **kwargs):
+            raise RuntimeError("template exploded")
+
+    h = make_handler(batch_size=1, flush_interval=60)
+    h.jinja_template = ExplodingTemplate()
+    h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "hello world", None, None))
+    h.close()
+    prompt, records = h.llm_router.calls[0]
+    assert "Log Summary: 1 entries" in prompt
+    assert "hello world" in prompt
+    assert "Template error" in prompt
+
+
+def test_worker_loop_logs_and_survives_a_processing_exception(caplog):
+    def bad_scrubber(data):
+        raise RuntimeError("scrub explode")
+
+    h = make_handler(pii_scrubber=bad_scrubber, batch_size=1, flush_interval=60)
+    with caplog.at_level(logging.ERROR, logger="loglens.handlers.ai_handler"):
+        h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None))
+    h.close()
+    assert h.llm_router.calls == []
+    assert "failed to process a batch" in caplog.text
+
+
+def test_worker_loop_survives_a_non_exception_base_exception_and_keeps_going(caplog):
+    # A BaseException that is not an Exception (e.g. a deliberate fatal
+    # signal from misbehaving user code) must not kill the worker thread --
+    # it must be logged and the worker must keep draining later batches.
+    class Fatal(BaseException):
+        pass
+
+    calls = {"n": 0}
+
+    def flaky_scrubber(data):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise Fatal("boom")
+        return data
+
+    router = FakeRouter()
+    h = make_handler(
+        llm_router=router, pii_scrubber=flaky_scrubber, batch_size=1, flush_interval=60
+    )
+    with caplog.at_level(logging.ERROR, logger="loglens.handlers.ai_handler"):
+        h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "first", None, None))
+        h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "second", None, None))
+    h.close()
+    assert len(router.calls) == 1, "the batch after the Fatal error must still be processed"
+    assert "unexpected error" in caplog.text

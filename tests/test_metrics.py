@@ -1,11 +1,29 @@
 import logging
+import socket
 import sys
 
 import pytest
 
 from loglens.config.settings import Settings
-from loglens.metrics.prometheus import AILoggingMetrics, _NoopMetric
 from loglens.handlers.ai_handler import AIHandler
+from loglens.metrics import prometheus as prometheus_module
+from loglens.metrics.prometheus import AILoggingMetrics, _NoopMetric
+
+
+def _free_port() -> int:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("0.0.0.0", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+@pytest.fixture(autouse=True)
+def _reset_prometheus_server_flag(monkeypatch):
+    # start_prometheus_server_if_enabled() guards against starting the HTTP
+    # server twice via a module-level flag. Reset it per test so each test's
+    # "did it (attempt to) start?" assertion is not decided by test order.
+    monkeypatch.setattr(prometheus_module, "_prometheus_server_started_flag", False)
 
 
 class FakeRouter:
@@ -26,9 +44,7 @@ def test_real_metrics_labeled_counter_readback():
     metrics.ai_calls_total.labels(model="llm", status="success").inc()
 
     assert (
-        registry.get_sample_value(
-            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
-        )
+        registry.get_sample_value("loglens_ai_calls_total", {"model": "llm", "status": "success"})
         == 1.0
     )
 
@@ -51,10 +67,7 @@ def test_handler_integration_records_processed_counter():
 
     h.close()  # deterministic: close() drains and joins the worker
     assert len(h.llm_router.calls) == 1
-    assert (
-        registry.get_sample_value("loglens_handler_records_processed_total")
-        == 3.0
-    )
+    assert registry.get_sample_value("loglens_handler_records_processed_total") == 3.0
 
 
 def test_noop_metrics_fallback_when_prometheus_client_unimportable(monkeypatch):
@@ -117,9 +130,73 @@ def test_two_default_instances_get_distinct_registries():
     metrics_a.ai_calls_total.labels(model="llm", status="success").inc()
     metrics_b.ai_calls_total.labels(model="llm", status="success").inc()
 
-    assert metrics_a.registry.get_sample_value(
-        "loglens_ai_calls_total", {"model": "llm", "status": "success"}
-    ) == 1.0
-    assert metrics_b.registry.get_sample_value(
-        "loglens_ai_calls_total", {"model": "llm", "status": "success"}
-    ) == 1.0
+    assert (
+        metrics_a.registry.get_sample_value(
+            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
+        )
+        == 1.0
+    )
+    assert (
+        metrics_b.registry.get_sample_value(
+            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
+        )
+        == 1.0
+    )
+
+
+def test_start_prometheus_server_disabled_by_settings(caplog):
+    settings = Settings(loglens_prometheus_enabled=False)
+    with caplog.at_level(logging.INFO, logger="loglens.metrics.prometheus"):
+        prometheus_module.start_prometheus_server_if_enabled(settings)
+    assert "disabled by configuration" in caplog.text
+
+
+def test_start_prometheus_server_starts_and_is_idempotent(caplog):
+    settings = Settings(loglens_prometheus_enabled=True, loglens_prometheus_port=_free_port())
+    with caplog.at_level(logging.DEBUG, logger="loglens.metrics.prometheus"):
+        prometheus_module.start_prometheus_server_if_enabled(settings)
+        assert prometheus_module._prometheus_server_started_flag is True
+        # A second call must not attempt to bind the port again -- it should
+        # short-circuit on the "already started" guard instead.
+        prometheus_module.start_prometheus_server_if_enabled(settings)
+    assert "started on port" in caplog.text
+    assert "already started" in caplog.text
+
+
+def test_start_prometheus_server_reports_port_already_in_use(caplog):
+    # start_http_server() binds "0.0.0.0" by default, so the blocking socket
+    # must occupy that same wildcard address for the port collision to be
+    # genuine (binding only "localhost" on the same port does not conflict).
+    blocking_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    blocking_socket.bind(("0.0.0.0", 0))
+    port = blocking_socket.getsockname()[1]
+    blocking_socket.listen(1)
+    try:
+        settings = Settings(loglens_prometheus_enabled=True, loglens_prometheus_port=port)
+        with caplog.at_level(logging.DEBUG, logger="loglens.metrics.prometheus"):
+            prometheus_module.start_prometheus_server_if_enabled(settings)
+        assert "Port might be in use" in caplog.text
+        assert prometheus_module._prometheus_server_started_flag is False
+    finally:
+        blocking_socket.close()
+
+
+def test_start_prometheus_server_handles_missing_prometheus_client(monkeypatch, caplog):
+    monkeypatch.setitem(sys.modules, "prometheus_client", None)
+    settings = Settings(loglens_prometheus_enabled=True, loglens_prometheus_port=_free_port())
+    with caplog.at_level(logging.WARNING, logger="loglens.metrics.prometheus"):
+        prometheus_module.start_prometheus_server_if_enabled(settings)
+    assert "prometheus_client not installed" in caplog.text
+    assert prometheus_module._prometheus_server_started_flag is False
+
+
+def test_start_prometheus_server_handles_unexpected_error(monkeypatch, caplog):
+    def boom():
+        raise RuntimeError("metrics singleton exploded")
+
+    monkeypatch.setattr(prometheus_module, "get_metrics_instance", boom)
+    settings = Settings(loglens_prometheus_enabled=True, loglens_prometheus_port=_free_port())
+    with caplog.at_level(logging.ERROR, logger="loglens.metrics.prometheus"):
+        prometheus_module.start_prometheus_server_if_enabled(settings)
+    assert "unexpected error occurred while starting Prometheus server" in caplog.text
+    assert prometheus_module._prometheus_server_started_flag is False
