@@ -110,37 +110,3 @@ def get_ai_logger(name: str) -> AILogger:
 # logging.setLoggerClass(AILogger)
 # This line can be called by the application at its entry point.
 # Or, users can exclusively use `get_ai_logger`.
-
-if __name__ == "__main__":
-    # Example of setting AILogger as the default logger class
-    # This should ideally be done at the very beginning of an application
-    logging.setLoggerClass(AILogger)
-
-    # Now, any logger obtained via logging.getLogger will be an AILogger instance
-    logger1 = logging.getLogger("my_app.module1")
-    logger2 = logging.getLogger("my_app.module2")
-
-    print(f"Logger1 type: {type(logger1)}")
-    print(f"Logger2 type: {type(logger2)}")
-
-    # Test basic logging (will go to console by default if no handlers configured)
-    # To see output, you might need a basicConfig or to add a handler.
-    logging.basicConfig(level=logging.INFO)  # For basic console output
-
-    logger1.info("This is an info message from logger1 (AILogger).")
-    logger1.warning("This is a warning from logger1.")
-
-    # Example of using the factory function
-    # (setLoggerClass is already called, so this will also return AILogger)
-    logger3 = get_ai_logger("my_app.module3")
-    print(f"Logger3 type: {type(logger3)}")
-    logger3.error("This is an error from logger3 (AILogger via factory).")
-
-    # Verify that it's indeed an AILogger
-    assert isinstance(logger1, AILogger)
-    assert isinstance(logger3, AILogger)
-
-    # Verify it's also a logging.Logger
-    assert isinstance(logger1, logging.Logger)
-
-    print("AILogger basic tests passed.")

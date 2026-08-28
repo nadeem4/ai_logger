@@ -1,5 +1,9 @@
+import re
+
 from loglens.utils.pii_filter import (
+    compile_rules,
     scrub_pii_from_dict,
+    scrub_text,
 )
 
 
@@ -51,3 +55,57 @@ def test_invalid_custom_regex_is_skipped_not_fatal():
     rules = [{"name": "bad", "regex": "([", "replacement": "x"}]
     out = scrub_pii_from_dict({"m": "hello"}, custom_rules=rules)
     assert out["m"] == "hello"
+
+
+def test_scrub_text_passes_through_non_string_values_unchanged():
+    assert scrub_text(42, []) == 42
+    assert scrub_text(None, []) is None
+
+
+def test_scrub_text_applies_callable_replacement():
+    rules = [
+        {
+            "name": "digits",
+            "regex": re.compile(r"\d+"),
+            "replacement": lambda m: f"<{m.group(0)}>",
+        }
+    ]
+    assert scrub_text("order 12345 shipped", rules) == "order <12345> shipped"
+
+
+def test_scrub_pii_from_dict_uses_callable_replacement_end_to_end():
+    def mask_ip(match: re.Match) -> str:
+        parts = match.group(0).split(".")
+        return f"{parts[0]}.{parts[1]}.x.x"
+
+    rules = [
+        {
+            "name": "ip_mask",
+            "regex": re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
+            "replacement": mask_ip,
+        }
+    ]
+    out = scrub_pii_from_dict({"m": "from 10.1.2.3"}, custom_rules=rules, use_default_rules=False)
+    assert out["m"] == "from 10.1.x.x"
+
+
+def test_compile_rules_mixes_valid_and_invalid_patterns():
+    rules = [
+        {"name": "good", "regex": r"\d+", "replacement": "[N]"},
+        {"name": "bad", "regex": "([", "replacement": "x"},
+        {"name": "precompiled", "regex": re.compile(r"[a-z]+"), "replacement": "[W]"},
+    ]
+    compiled = compile_rules(rules)
+    assert len(compiled) == 2  # the invalid one is skipped
+    names = {r["name"] for r in compiled}
+    assert names == {"good", "precompiled"}
+    for rule in compiled:
+        assert isinstance(rule["regex"], re.Pattern)
+
+
+def test_max_depth_stops_recursion_and_returns_item_unscrubbed():
+    # Two levels of list nesting with max_depth=1: the innermost string is
+    # past the depth limit and must come back untouched rather than scrubbed.
+    data = {"a": ["outer", ["alice@example.com"]]}
+    out = scrub_pii_from_dict(data, max_depth=1)
+    assert out["a"][1][0] == "alice@example.com"
