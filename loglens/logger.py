@@ -10,6 +10,7 @@ from typing import Any, Union, Mapping
 # These could be moved to a config file or environment variables later
 AI_LOGGER_DEFAULT_LEVEL = os.environ.get("LOGLENS_DEFAULT_LEVEL", "INFO").upper()
 
+
 class AILogger(logging.Logger):
     """
     AI-enhanced Logger class.
@@ -55,6 +56,7 @@ class AILogger(logging.Logger):
     # Methods for setting level, adding/removing filters and handlers are
     # also inherited and should work as expected.
 
+
 def get_ai_logger(name: str) -> AILogger:
     """
     Factory function to get an instance of AILogger.
@@ -70,7 +72,7 @@ def get_ai_logger(name: str) -> AILogger:
     original_logger_class = logging.getLoggerClass()
     if original_logger_class is not AILogger:
         logging.setLoggerClass(AILogger)
-    
+
     logger = logging.getLogger(name)
 
     # Restore original logger class if it was changed,
@@ -100,7 +102,7 @@ def get_ai_logger(name: str) -> AILogger:
         # The standard way is `logging.setLoggerClass(AILogger)` at the start.
         pass
 
-    return logger # type: ignore
+    return logger  # type: ignore
 
 
 # To make AILogger the default for all loggers created after this module is imported
@@ -109,7 +111,7 @@ def get_ai_logger(name: str) -> AILogger:
 # This line can be called by the application at its entry point.
 # Or, users can exclusively use `get_ai_logger`.
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Example of setting AILogger as the default logger class
     # This should ideally be done at the very beginning of an application
     logging.setLoggerClass(AILogger)
@@ -123,11 +125,11 @@ if __name__ == '__main__':
 
     # Test basic logging (will go to console by default if no handlers configured)
     # To see output, you might need a basicConfig or to add a handler.
-    logging.basicConfig(level=logging.INFO) # For basic console output
+    logging.basicConfig(level=logging.INFO)  # For basic console output
 
     logger1.info("This is an info message from logger1 (AILogger).")
     logger1.warning("This is a warning from logger1.")
-    
+
     # Example of using the factory function
     # (setLoggerClass is already called, so this will also return AILogger)
     logger3 = get_ai_logger("my_app.module3")

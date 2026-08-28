@@ -1,12 +1,15 @@
 import logging, queue, sys, threading, time
 from loglens.handlers.ai_handler import AIHandler
 
+
 class FakeRouter:
     def __init__(self):
         self.calls = []
+
     def route_prompt(self, prompt, records):
         self.calls.append((prompt, records))
         return "ok"
+
 
 def make_handler(**kw):
     kw.setdefault("llm_router", FakeRouter())
@@ -14,20 +17,27 @@ def make_handler(**kw):
     kw.setdefault("flush_interval", 0.2)
     return AIHandler(**kw)
 
+
 def test_timed_flush_does_not_deadlock():
     h = make_handler()
     rec = logging.LogRecord("t", logging.INFO, "f", 1, "hi", None, None)
     h.emit(rec)
     done = threading.Event()
+
     def wait_for_flush():
         deadline = time.time() + 3
         while time.time() < deadline:
             if h.llm_router.calls:
-                done.set(); return
+                done.set()
+                return
             time.sleep(0.05)
-    t = threading.Thread(target=wait_for_flush, daemon=True); t.start(); t.join(4)
+
+    t = threading.Thread(target=wait_for_flush, daemon=True)
+    t.start()
+    t.join(4)
     h.close()
     assert done.is_set(), "timed flush deadlocked or never fired"
+
 
 def test_batch_size_triggers_flush():
     h = make_handler(batch_size=3, flush_interval=60)
@@ -38,11 +48,13 @@ def test_batch_size_triggers_flush():
     prompt, records = h.llm_router.calls[0]
     assert len(records) == 3
 
+
 def test_close_drains_buffer():
     h = make_handler(batch_size=100, flush_interval=60)
     h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "last", None, None))
     h.close()
     assert len(h.llm_router.calls) == 1
+
 
 def test_router_exception_never_propagates_to_caller():
     # Also restores the coverage lost when processing moved to the worker
@@ -51,15 +63,20 @@ def test_router_exception_never_propagates_to_caller():
     class BoomRouter:
         def __init__(self):
             self.calls = 0
+
         def route_prompt(self, p, r):
             self.calls += 1
             raise RuntimeError("api down")
+
     router = BoomRouter()
     h = make_handler(llm_router=router, batch_size=1, flush_interval=60, max_retries=0)
     h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "x", None, None))  # must not raise
-    h.emit(logging.LogRecord("t", logging.ERROR, "f", 1, "y", None, None))  # worker must have survived
+    h.emit(
+        logging.LogRecord("t", logging.ERROR, "f", 1, "y", None, None)
+    )  # worker must have survived
     h.close()  # deterministic: close() drains and joins the worker
     assert router.calls == 2, "a batch that raises must not kill the worker thread"
+
 
 def test_pii_scrubbed_before_prompt():
     h = make_handler(batch_size=1, flush_interval=60)
@@ -69,12 +86,14 @@ def test_pii_scrubbed_before_prompt():
     assert "bob@x.io" not in prompt
     assert "[REDACTED_EMAIL]" in prompt
 
+
 def test_retry_loop_single_failure_does_not_sleep():
     # Covers the brief's "verify a single failure doesn't sleep" requirement
     # against the real retry-loop code path.
     class BoomRouter:
         def __init__(self):
             self.call_count = 0
+
         def route_prompt(self, p, r):
             self.call_count += 1
             raise RuntimeError("api down")
@@ -102,8 +121,12 @@ def test_ai_response_callback_invoked_on_success():
 
 def test_emit_returns_fast_even_when_provider_is_slow():
     import time
+
     class SlowRouter:
-        def route_prompt(self, p, r): time.sleep(1.5); return "ok"
+        def route_prompt(self, p, r):
+            time.sleep(1.5)
+            return "ok"
+
     h = make_handler(llm_router=SlowRouter(), batch_size=1, flush_interval=60)
     t0 = time.time()
     h.emit(logging.LogRecord("t", logging.INFO, "f", 1, "x", None, None))
@@ -219,9 +242,7 @@ def test_none_router_response_is_not_reported_as_a_successful_call():
 
     assert received == [], "callback must not be invoked when no AI call was made"
     assert (
-        registry.get_sample_value(
-            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
-        )
+        registry.get_sample_value("loglens_ai_calls_total", {"model": "llm", "status": "success"})
         is None
     ), "a None response must not be counted as a successful AI call"
     assert (
@@ -231,10 +252,7 @@ def test_none_router_response_is_not_reported_as_a_successful_call():
         == 1.0
     )
     assert (
-        registry.get_sample_value(
-            "loglens_ai_call_latency_seconds_count", {"model": "llm"}
-        )
-        is None
+        registry.get_sample_value("loglens_ai_call_latency_seconds_count", {"model": "llm"}) is None
     ), "no latency may be observed for a call that never happened"
 
 
@@ -351,6 +369,5 @@ def test_close_racing_live_emit_never_loses_records_silently(caplog):
         )
         if left_in_queue:
             assert "still queued" in caplog.text, (
-                f"{left_in_queue} record(s) were left queued at close() with "
-                "nothing logged"
+                f"{left_in_queue} record(s) were left queued at close() with nothing logged"
             )

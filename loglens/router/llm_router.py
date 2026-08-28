@@ -74,7 +74,9 @@ class LLMRouter:
                 from ..providers.anthropic_provider import AnthropicProvider
 
                 fast = AnthropicProvider(model=fast_model, api_key=self.settings.anthropic_api_key)
-                capable = AnthropicProvider(model=capable_model, api_key=self.settings.anthropic_api_key)
+                capable = AnthropicProvider(
+                    model=capable_model, api_key=self.settings.anthropic_api_key
+                )
             except ProviderError as e:
                 self._warn_provider_unavailable(provider, e)
                 return None, None

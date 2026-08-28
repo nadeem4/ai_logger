@@ -13,6 +13,7 @@ from ..utils.pii_filter import scrub_pii_from_dict
 from ..utils.circuit_breaker import CircuitBreaker
 from ..metrics.prometheus import get_metrics_instance
 
+
 class AIHandler(logging.Handler):
     """
     A logging handler that processes log records, batches them,
@@ -24,30 +25,43 @@ class AIHandler(logging.Handler):
     and Prometheus metrics.
     """
 
-    def __init__(self,
-                 level: int = logging.NOTSET,
-                 batch_size: Optional[int] = None,
-                 flush_interval: Optional[float] = None,
-                 max_retries: Optional[int] = None,
-                 retry_backoff_factor: Optional[float] = None,
-                 settings=None,
-                 llm_router=None,
-                 pii_scrubber=None,
-                 ai_response_callback: Optional[Callable[[Any], None]] = None
-                 ) -> None:
+    def __init__(
+        self,
+        level: int = logging.NOTSET,
+        batch_size: Optional[int] = None,
+        flush_interval: Optional[float] = None,
+        max_retries: Optional[int] = None,
+        retry_backoff_factor: Optional[float] = None,
+        settings=None,
+        llm_router=None,
+        pii_scrubber=None,
+        ai_response_callback: Optional[Callable[[Any], None]] = None,
+    ) -> None:
         super().__init__(level)
         self.settings = settings or get_settings()
         self.batch_size = batch_size if batch_size is not None else self.settings.loglens_batch_size
-        self.flush_interval = flush_interval if flush_interval is not None else self.settings.loglens_flush_interval_seconds
-        self.max_retries = max_retries if max_retries is not None else self.settings.loglens_max_retries
-        self.retry_backoff_factor = retry_backoff_factor if retry_backoff_factor is not None else self.settings.loglens_retry_backoff_factor
+        self.flush_interval = (
+            flush_interval
+            if flush_interval is not None
+            else self.settings.loglens_flush_interval_seconds
+        )
+        self.max_retries = (
+            max_retries if max_retries is not None else self.settings.loglens_max_retries
+        )
+        self.retry_backoff_factor = (
+            retry_backoff_factor
+            if retry_backoff_factor is not None
+            else self.settings.loglens_retry_backoff_factor
+        )
 
         self.llm_router = llm_router or LLMRouter(self.settings)
-        self.pii_scrubber = pii_scrubber or (lambda data: scrub_pii_from_dict(
-            data,
-            custom_rules=self.settings.loglens_pii_rules_json,
-            use_default_rules=self.settings.loglens_pii_use_default_rules
-        ))
+        self.pii_scrubber = pii_scrubber or (
+            lambda data: scrub_pii_from_dict(
+                data,
+                custom_rules=self.settings.loglens_pii_rules_json,
+                use_default_rules=self.settings.loglens_pii_use_default_rules,
+            )
+        )
         self.ai_response_callback = ai_response_callback or self._default_ai_response_logger
 
         self._buffer: List[logging.LogRecord] = []
@@ -86,7 +100,7 @@ class AIHandler(logging.Handler):
             loader = jinja2.FileSystemLoader(self.settings.loglens_jinja_template_dir)
         else:
             # Default to loading templates from a 'templates' directory within the package
-            loader = jinja2.PackageLoader('loglens', 'templates')
+            loader = jinja2.PackageLoader("loglens", "templates")
 
         self.jinja_env = jinja2.Environment(
             loader=loader,
@@ -95,10 +109,12 @@ class AIHandler(logging.Handler):
             # strings that are the most valuable part of a log line.
             autoescape=False,
             trim_blocks=True,
-            lstrip_blocks=True
+            lstrip_blocks=True,
         )
         try:
-            self.jinja_template = self.jinja_env.get_template(self.settings.loglens_jinja_log_prompt_template_name)
+            self.jinja_template = self.jinja_env.get_template(
+                self.settings.loglens_jinja_log_prompt_template_name
+            )
         except jinja2.TemplateNotFound:
             logging.getLogger(__name__).warning(
                 f"Jinja2 template '{self.settings.loglens_jinja_log_prompt_template_name}' not found. "
@@ -162,12 +178,15 @@ class AIHandler(logging.Handler):
         json_str = self.formatter.format(record)
         try:
             import json
+
             log_data = json.loads(json_str)
         except Exception:
             log_data = {
                 "message": record.getMessage(),
                 "levelname": record.levelname,
-                "timestamp": self.formatter.formatTime(record, self.formatter.datefmt) if self.formatter else record.created
+                "timestamp": self.formatter.formatTime(record, self.formatter.datefmt)
+                if self.formatter
+                else record.created,
             }
         return log_data
 
@@ -222,10 +241,12 @@ class AIHandler(logging.Handler):
                 break
             except Exception as e:
                 self.metrics.ai_calls_total.labels(model="llm", status="error").inc()
-                self.metrics.ai_call_errors_total.labels(model="llm", error_type=type(e).__name__).inc()
+                self.metrics.ai_call_errors_total.labels(
+                    model="llm", error_type=type(e).__name__
+                ).inc()
                 # Only back off if another attempt is actually going to happen.
                 if attempt < self.max_retries:
-                    backoff = self.retry_backoff_factor * (2 ** attempt)
+                    backoff = self.retry_backoff_factor * (2**attempt)
                     time.sleep(backoff)
                 attempt += 1
 
@@ -247,8 +268,12 @@ class AIHandler(logging.Handler):
         state_after = self.circuit_breaker.state
 
         if state_after != state_before:
-            self.metrics.ai_circuit_breaker_state_changes_total.labels(model="llm", new_state=state_after).inc()
-            self.metrics.ai_circuit_breaker_currently_open.labels(model="llm").set(1 if state_after == "OPEN" else 0)
+            self.metrics.ai_circuit_breaker_state_changes_total.labels(
+                model="llm", new_state=state_after
+            ).inc()
+            self.metrics.ai_circuit_breaker_currently_open.labels(model="llm").set(
+                1 if state_after == "OPEN" else 0
+            )
 
     def _build_prompt_with_jinja(self, records: List[Dict[str, Any]]) -> str:
         try:
@@ -266,7 +291,7 @@ class AIHandler(logging.Handler):
         ai_response_logger = logging.getLogger(self.settings.loglens_ai_response_log_logger_name)
         if not ai_response_logger.handlers:
             ch = logging.StreamHandler()
-            ch.setFormatter(logging.Formatter('%(asctime)s - AI_RESPONSE - %(message)s'))
+            ch.setFormatter(logging.Formatter("%(asctime)s - AI_RESPONSE - %(message)s"))
             ai_response_logger.addHandler(ch)
             ai_response_logger.propagate = False
         ai_response_logger.info(str(response))
@@ -441,8 +466,11 @@ class AIHandler(logging.Handler):
                 pass
         super().close()
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     ai_handler = AIHandler(batch_size=3, flush_interval=5.0)
     ai_handler.setLevel(logging.INFO)
@@ -452,7 +480,9 @@ if __name__ == '__main__':
     demo_logger.addHandler(ai_handler)
     demo_logger.propagate = False
 
-    print(f"AIHandler demo: Batch size = {ai_handler.batch_size}, Flush interval = {ai_handler.flush_interval}s")
+    print(
+        f"AIHandler demo: Batch size = {ai_handler.batch_size}, Flush interval = {ai_handler.flush_interval}s"
+    )
 
     demo_logger.debug("This is a DEBUG message (should be ignored by AIHandler).")
     demo_logger.info("User 'john.doe@example.com' logged in.")

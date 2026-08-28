@@ -26,9 +26,7 @@ def test_real_metrics_labeled_counter_readback():
     metrics.ai_calls_total.labels(model="llm", status="success").inc()
 
     assert (
-        registry.get_sample_value(
-            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
-        )
+        registry.get_sample_value("loglens_ai_calls_total", {"model": "llm", "status": "success"})
         == 1.0
     )
 
@@ -51,10 +49,7 @@ def test_handler_integration_records_processed_counter():
 
     h.close()  # deterministic: close() drains and joins the worker
     assert len(h.llm_router.calls) == 1
-    assert (
-        registry.get_sample_value("loglens_handler_records_processed_total")
-        == 3.0
-    )
+    assert registry.get_sample_value("loglens_handler_records_processed_total") == 3.0
 
 
 def test_noop_metrics_fallback_when_prometheus_client_unimportable(monkeypatch):
@@ -117,9 +112,15 @@ def test_two_default_instances_get_distinct_registries():
     metrics_a.ai_calls_total.labels(model="llm", status="success").inc()
     metrics_b.ai_calls_total.labels(model="llm", status="success").inc()
 
-    assert metrics_a.registry.get_sample_value(
-        "loglens_ai_calls_total", {"model": "llm", "status": "success"}
-    ) == 1.0
-    assert metrics_b.registry.get_sample_value(
-        "loglens_ai_calls_total", {"model": "llm", "status": "success"}
-    ) == 1.0
+    assert (
+        metrics_a.registry.get_sample_value(
+            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
+        )
+        == 1.0
+    )
+    assert (
+        metrics_b.registry.get_sample_value(
+            "loglens_ai_calls_total", {"model": "llm", "status": "success"}
+        )
+        == 1.0
+    )

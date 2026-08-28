@@ -50,7 +50,9 @@ class AILoggingMetrics:
                 use_real_metrics = False
 
         if use_real_metrics:
-            self.registry = registry if registry is not None else real_metrics_module.CollectorRegistry()
+            self.registry = (
+                registry if registry is not None else real_metrics_module.CollectorRegistry()
+            )
             self._build_real_metrics(real_metrics_module)
         else:
             if not self.settings.loglens_prometheus_enabled:
@@ -199,6 +201,8 @@ def start_prometheus_server_if_enabled(settings: Optional[Settings] = None) -> N
                 "Metrics server cannot be started."
             )
         except OSError as e:  # Handle port already in use
-            logger.error(f"Failed to start Prometheus server on port {app_settings.loglens_prometheus_port}: {e}. Port might be in use.")
+            logger.error(
+                f"Failed to start Prometheus server on port {app_settings.loglens_prometheus_port}: {e}. Port might be in use."
+            )
         except Exception as e:
             logger.error(f"An unexpected error occurred while starting Prometheus server: {e}")

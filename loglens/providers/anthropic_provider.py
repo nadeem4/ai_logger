@@ -1,8 +1,11 @@
 from typing import Optional
 from .base import LLMProvider, ProviderError
 
+
 class AnthropicProvider(LLMProvider):
-    def __init__(self, model: str, api_key: str, client: Optional[object] = None, max_tokens: int = 1024):
+    def __init__(
+        self, model: str, api_key: str, client: Optional[object] = None, max_tokens: int = 1024
+    ):
         self.model = model
         self.max_tokens = max_tokens
         if client is None:
@@ -16,7 +19,8 @@ class AnthropicProvider(LLMProvider):
     def complete(self, prompt: str) -> str:
         try:
             resp = self._client.messages.create(
-                model=self.model, max_tokens=self.max_tokens,
+                model=self.model,
+                max_tokens=self.max_tokens,
                 messages=[{"role": "user", "content": prompt}],
             )
             return resp.content[0].text

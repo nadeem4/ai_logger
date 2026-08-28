@@ -1,6 +1,7 @@
 from typing import Optional
 from .base import LLMProvider, ProviderError
 
+
 class OpenAIProvider(LLMProvider):
     def __init__(self, model: str, api_key: str, client: Optional[object] = None):
         self.model = model

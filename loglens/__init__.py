@@ -25,6 +25,7 @@ __all__ = [
 # Version of the loglens package, single-sourced from installed package metadata
 # (which reads it from pyproject.toml).
 from importlib.metadata import version as _pkg_version, PackageNotFoundError
+
 try:
     __version__ = _pkg_version("loglens")
 except PackageNotFoundError:  # running from a source checkout without install
