@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a problem with loglens
+labels: ["bug"]
+body:
+  - type: input
+    id: loglens-version
+    attributes:
+      label: loglens version
+      description: Output of `pip show loglens` or the pinned version in your lockfile.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: Output of `python --version`.
+      placeholder: "3.12.4"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11 / Ubuntu 22.04 / macOS 14"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider and extra installed
+      description: Which LLM provider and which optional extra(s) you installed (`pip install loglens[...]`).
+      options:
+        - "openai"
+        - "anthropic"
+        - "both (openai + anthropic)"
+        - "neither / not applicable"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal repro
+      description: The smallest code snippet that reproduces the issue. Include relevant env vars (redact API keys).
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the full traceback if there is one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: health-check
+    attributes:
+      label: loglens-check output
+      description: Run `loglens-check --json` and paste the output here. This helps rule out a configuration issue before it's a bug.
+      render: json
+    validations:
+      required: false

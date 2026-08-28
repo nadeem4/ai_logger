@@ -1,0 +1,32 @@
+{#
+  Custom incident-response prompt template for AIHandler.
+
+  Point AIHandler at this file with:
+    LOGLENS_JINJA_TEMPLATE_DIR=examples/templates
+    LOGLENS_JINJA_LOG_PROMPT_TEMPLATE_NAME=incident_prompt.jinja2
+
+  Variables available (same as loglens/templates/default_log_prompt.jinja2):
+  - logs: a list of log record dictionaries, each with keys like
+    timestamp, levelname, message, pathname, funcName, lineno,
+    exception_info (if any), stack_info (if any), extras (if any).
+#}
+You are an on-call engineer triaging the following batch of application log records.
+Respond using exactly these three labeled sections:
+
+SEVERITY: <one word -- LOW, MEDIUM, HIGH, or CRITICAL>
+ROOT CAUSE: <your best hypothesis, in one or two sentences>
+SUGGESTED ACTION: <a concrete next step for the on-call engineer>
+
+Log Batch ({{ logs|length }} records):
+==================================================
+
+{% for log_entry in logs %}
+Timestamp: {{ log_entry.timestamp }}
+Level:     {{ log_entry.levelname }}
+Message:   {{ log_entry.message }}
+{% if log_entry.exception_info %}
+Exception Info:
+{{ log_entry.exception_info|indent(2, true) }}
+{% endif %}
+--------------------------------------------------
+{% endfor %}
