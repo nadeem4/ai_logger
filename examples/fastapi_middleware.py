@@ -7,7 +7,7 @@ only verifies this file py_compile's; its runtime behaviour is not
 verified there. Run it manually to see it work.
 
 Install:
-    pip install loglens[openai] fastapi uvicorn
+    pip install "loglens[openai]" fastapi uvicorn
 
 Run:
     uvicorn examples.fastapi_middleware:app --reload

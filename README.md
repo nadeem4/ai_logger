@@ -11,14 +11,25 @@
 import logging
 from loglens import AIHandler, get_async_logging_setup
 
-logger = logging.getLogger("my_app")
-queue_handler, listener = get_async_logging_setup(AIHandler(level=logging.WARNING))
-logger.addHandler(queue_handler)
+logging.basicConfig(level=logging.INFO)  # AI responses log at INFO -- see note below
+
+ai_handler = AIHandler(level=logging.WARNING)
+queue_handler, listener = get_async_logging_setup(ai_handler)
+logging.getLogger("my_app").addHandler(queue_handler)
 listener.start()
-logger.error("payment service timeout for order 8812")  # -> AI analysis logged to 'loglens.ai_responses'
+logging.getLogger("my_app").error("payment service timeout for order 8812")
+
+listener.stop()
+ai_handler.close()  # drains the buffer and blocks (bounded timeout) until the batch is sent
 ```
 
 `AIHandler` needs a provider API key to actually call an LLM — set `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY` and `LOGLENS_PROVIDER=anthropic`) in the environment first. Without a key, the snippet above still runs end-to-end (batching, PII scrubbing, prompt rendering) but `route_prompt()` returns `None` and nothing is sent anywhere — see [Configuration reference](#configuration-reference).
+
+**The AI response is logged at `INFO` to the `loglens.ai_responses` logger, and is invisible unless that logger (or the root logger, as above) is enabled at `INFO` or lower** — with default logging config it's silently swallowed by root's default `WARNING` level. The `listener.stop()` / `ai_handler.close()` pair at the end is not optional either: without it, a script that isn't attached to a terminal (output redirected to a file, a container, a systemd unit, `python app.py > out.log`) can exit via `logging.shutdown()` before the background worker has dequeued and sent the batch, silently dropping it. With a working provider key, the last line of output looks like this:
+
+```
+2024-01-15 10:23:04,112 - AI_RESPONSE - Root cause: order 8812 timed out waiting on the payment gateway (3.2s). Suggested action: check gateway latency dashboards; consider raising the client timeout.
+```
 
 ## ⚠️ Privacy — read this first
 
@@ -59,14 +70,18 @@ sequenceDiagram
 
 `QueueHandler`/`QueueListener` move the work off the caller's thread; `AIHandler` itself also has its own internal background worker, so batching, PII scrubbing, prompt rendering, and the LLM call never block whatever thread called `logger.error(...)`, and a failing or slow provider never raises into the host application.
 
+**`QueueHandler`/`QueueListener` vs. attaching `AIHandler` directly.** `AIHandler` already does its batching, scrubbing, and provider calls on its own background thread — you can call `logger.addHandler(AIHandler(...))` directly and never touch a queue. Do that for a script, a one-off tool, or anywhere a few microseconds of `emit()` overhead per log call (buffering the record, checking the batch size) is a non-issue. Add `get_async_logging_setup()`'s `QueueHandler`/`QueueListener` pair on top when the calling thread itself must never block on that `emit()` overhead — e.g. a request-handling thread in a web server under load, or any latency-sensitive hot path — since `QueueHandler.emit()` only puts the record on a queue and returns immediately, deferring everything else to the listener thread. The Quickstart above uses the queue form because it's the safer default to copy-paste; three of the four files in `examples/` attach `AIHandler` directly because they're simple scripts where the distinction doesn't matter.
+
 ## Installation
 
 ```bash
-pip install loglens[openai]       # OpenAI provider
-pip install loglens[anthropic]    # Anthropic provider
-pip install loglens[metrics]      # Prometheus metrics
-pip install loglens[all]          # openai + anthropic + metrics
+pip install "loglens[openai]"       # OpenAI provider
+pip install "loglens[anthropic]"    # Anthropic provider
+pip install "loglens[metrics]"      # Prometheus metrics
+pip install "loglens[all]"          # openai + anthropic + metrics
 ```
+
+The brackets must be quoted — on zsh (macOS's default shell since Catalina), an unquoted `pip install loglens[openai]` fails with `zsh: no matches found` because zsh treats `[...]` as a glob pattern.
 
 Core dependencies (`pydantic`, `pydantic-settings`, `Jinja2`) are always installed; the extras above are optional. Requires Python 3.10+.
 
@@ -139,6 +154,11 @@ loglens-check --json   # single-line JSON to stdout
 `ok` (and the `--json` field of the same name) means **AI logging will work with the currently configured provider** — it reflects only the provider named by `LOGLENS_PROVIDER`, since `LLMRouter` only ever builds that one provider and never falls back to the other at runtime. The `providers` object separately reports both `openai` and `anthropic` state (`ok` / `no_key` / `sdk_missing`) regardless of which one is selected, so you can see what switching `LOGLENS_PROVIDER` would give you.
 
 A provider's `"ok"` means its API key is present and its SDK is importable — **not** that the key has been verified. There is no `invalid_key` state and `loglens-check` makes no network call.
+
+Two more things to know about the output:
+
+- **The `metrics` line can read `❌` while `overall` reads `✅`.** Like the provider case above, `overall` doesn't roll up every line — a missing `prometheus_client` (`[metrics]` extra not installed) fails the `metrics` check without affecting `ok`/`overall`, since metrics are optional and unrelated to whether AI logging itself will work.
+- **The `✅`/`❌` glyphs degrade to `[OK]`/`[FAIL]`** when stdout's encoding can't represent them — e.g. a Windows console still on the legacy `cp1252` codepage. `--json` output is unaffected either way.
 
 ## License
 

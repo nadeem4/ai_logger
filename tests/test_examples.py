@@ -20,6 +20,7 @@ example run here leaks a background thread or hangs the suite.
 
 import importlib.util
 import json
+import logging
 import py_compile
 import tempfile
 import types
@@ -78,7 +79,7 @@ def test_found_expected_example_files():
 
 def test_fastapi_middleware_documents_install_and_run_commands():
     text = (EXAMPLES_DIR / "fastapi_middleware.py").read_text(encoding="utf-8")
-    assert "pip install loglens[openai] fastapi uvicorn" in text
+    assert 'pip install "loglens[openai]" fastapi uvicorn' in text
     assert "uvicorn examples.fastapi_middleware:app" in text
 
 
@@ -111,6 +112,19 @@ def test_basic_usage_runs_end_to_end_with_a_fake_provider(monkeypatch, capsys):
 
     monkeypatch.setattr("loglens.router.llm_router.LLMRouter.route_prompt", fake_route_prompt)
 
+    # AIHandler's default response callback lazily adds a plain
+    # logging.StreamHandler() to 'loglens.ai_responses' the first time it's
+    # used, and only if that logger has no handler yet -- it binds
+    # `stream=sys.stderr` at construction time and never rebinds. If some
+    # earlier test in the suite already triggered that (this is a
+    # process-wide logger, not per-test state), the handler here would be
+    # holding a stale, already-restored sys.stderr instead of this test's
+    # capsys-patched one, and the assertion below would see nothing.
+    # Clearing handlers first forces a fresh one bound to *this* test's
+    # capsys stderr, regardless of what ran before it.
+    ai_response_logger = logging.getLogger("loglens.ai_responses")
+    ai_response_logger.handlers.clear()
+
     module = _load_example("basic_usage")
     exit_code = module.main()
 
@@ -118,6 +132,12 @@ def test_basic_usage_runs_end_to_end_with_a_fake_provider(monkeypatch, capsys):
     assert calls, "expected the (faked) LLM to be called at least once"
     captured = capsys.readouterr()
     assert "Done." in captured.out
+    # The whole point of this example is to show the AI's response, not just
+    # print a closing message -- assert the fake response text actually
+    # reached the user. AIHandler's default response logger uses a plain
+    # logging.StreamHandler(), which defaults to stderr, so it's
+    # captured.err rather than captured.out.
+    assert "fake AI analysis" in captured.err
 
 
 # --- custom_pii_rules.py -------------------------------------------------

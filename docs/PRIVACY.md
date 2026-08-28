@@ -79,6 +79,22 @@ provider **unmodified**. In particular, it does **not** catch:
 - **Phone numbers, national ID / SSN-style numbers, IPv6 addresses.** None of these have a
   default rule either (the source even flags this: *"Add more rules as needed (e.g., phone
   numbers, SSNs — be careful with SSN regex accuracy)"*).
+- **A custom rule with a bad regex is silently dropped — not enforced, not logged, not
+  raised.** `compile_rules()` (`loglens/utils/pii_filter.py`) catches `re.error` on a bad
+  pattern and skips that rule with a bare `print()` to stdout — not a log record, not a
+  warning, not an exception. In a container, systemd unit, or anywhere else stdout isn't
+  watched, that message is lost and the rule is silently absent. Confirmed: setting
+  `LOGLENS_PII_RULES_JSON='[{"name": "employee_id", "regex": "EMP-[0-9{5}", "replacement":
+  "[REDACTED]"}]'` (an unbalanced `{` — a typo easy to make by hand) compiles nothing, and
+  `logger.warning("Escalated by EMP-40231")` reaches the prompt with `EMP-40231` sent
+  unredacted, with no error anywhere in the running process. Always verify a new rule
+  actually took effect — see the note at the end of the next section.
+- **Data nested past `max_depth` (default 10) in `extras` passes through completely
+  unscrubbed.** `scrub_pii_from_dict()`'s recursion stops at `max_depth` and returns
+  whatever is left below that depth unchanged — no truncation marker, no warning. Confirmed:
+  an email address nested 11+ levels deep inside `extra={...}` reaches the prompt verbatim,
+  with every default and custom rule above simply never applied to it. Keep `extras`
+  shallow, or don't nest untrusted/PII-bearing data past a handful of levels.
 
 Treat the default rules as a minimum floor, not a compliance control. If your logs might
 contain any of the above, add custom rules (below), scrub upstream before the message
@@ -128,6 +144,13 @@ handler = AIHandler(
 )
 ```
 
+**Verify your rule actually compiled before trusting it.** As covered above, a rule with an
+invalid regex is silently dropped rather than rejected — `logger.warning(...)` and everything
+after it will keep running as if the rule were never written. Test it directly:
+`loglens.utils.pii_filter.compile_rules([your_rule])` returns a list with your rule in it
+(compiled) or, on a bad pattern, a shorter list plus a `print()` to stdout — check the
+returned list's length, don't rely on watching for that message.
+
 ## How to disable sending entirely, per logger
 
 `loglens` is opt-in: a logger only reaches `AIHandler` if a handler chain leads to it, so
@@ -172,7 +195,7 @@ options without restructuring your handler setup:
 
 If no log from your application should ever leave the machine, don't attach `AIHandler`
 anywhere, or scope its use to a dedicated, clearly-named logger that only receives
-messages you have already reviewed. The `local` extra (`pip install loglens[local]`,
+messages you have already reviewed. The `local` extra (`pip install "loglens[local]"`,
 `transformers` + `torch`) is declared in `pyproject.toml` for on-device analysis, but at
 the time of writing it adds no on-device provider implementation — there is no
 `LLMProvider` in `loglens/providers/` that runs a local model. Installing `[local]` alone

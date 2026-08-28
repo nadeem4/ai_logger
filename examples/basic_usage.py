@@ -39,6 +39,13 @@ def run_demo() -> None:
     logger = logging.getLogger("loglens.examples.basic_usage")
     logger.setLevel(logging.DEBUG)
 
+    # AIHandler's default response callback logs the AI's analysis at INFO
+    # to the 'loglens.ai_responses' logger. That logger has no level of its
+    # own, so it inherits root's default WARNING and the response is
+    # silently dropped unless something enables it -- do that here so the
+    # response actually reaches stdout below.
+    logging.getLogger("loglens.ai_responses").setLevel(logging.INFO)
+
     ai_handler = AIHandler(level=logging.INFO)
     queue_handler, listener = get_async_logging_setup(ai_handler)
     logger.addHandler(queue_handler)
