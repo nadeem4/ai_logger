@@ -27,7 +27,7 @@ class _NoopMetric:
 
 class AILoggingMetrics:
     """
-    Container for Prometheus metrics related to the LogLens package.
+    Container for Prometheus metrics related to the LogScribe package.
 
     Builds real `prometheus_client` metrics when the library is importable
     and metrics are enabled in settings, otherwise builds `_NoopMetric`

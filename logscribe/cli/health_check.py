@@ -86,7 +86,7 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
     if status is None:
         status = HealthStatus()
 
-    cli_logger.info("Starting LogLens Package Health Check...")
+    cli_logger.info("Starting LogScribe Package Health Check...")
     all_checks_ok = True
 
     # 1. Load Settings
@@ -270,7 +270,7 @@ def run_health_checks(status: HealthStatus | None = None) -> bool:
     cli_logger.info("\n--- Health Check Summary ---")
     if all_checks_ok:
         cli_logger.info(
-            "All essential checks passed. LogLens package appears to be configured correctly."
+            "All essential checks passed. LogScribe package appears to be configured correctly."
         )
         cli_logger.info(
             "Note: Functional tests (e.g., actual AI calls) are not part of this health check."
@@ -366,7 +366,7 @@ def print_human_report(status: HealthStatus, stream: TextIO | None = None) -> No
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Health check for the LogLens package.")
+    parser = argparse.ArgumentParser(description="Health check for the LogScribe package.")
     parser.add_argument(
         "--json",
         action="store_true",

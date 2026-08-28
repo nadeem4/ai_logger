@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """
-    Configuration settings for the LogLens package.
+    Configuration settings for the LogScribe package.
     Settings are loaded from environment variables.
     """
 
