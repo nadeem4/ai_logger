@@ -1,0 +1,50 @@
+name: Docs
+on:
+  push: {branches: [main]}
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Runs on every push and PR, including from forks. Build-only: no Pages
+    # permissions are requested here, so this job cannot publish anything.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -e ".[docs]"
+      - run: mkdocs build --strict
+
+  deploy:
+    # Only runs on a push to main -- never for a pull_request event, so a
+    # fork PR can never reach this job or the pages/id-token permissions it
+    # requests.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -e ".[docs]"
+      - run: mkdocs build --strict
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: site}
+      - id: deployment
+        uses: actions/deploy-pages@v4

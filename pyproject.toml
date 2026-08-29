@@ -37,6 +37,18 @@ metrics = ["prometheus-client>=0.19"]
 local = ["transformers>=4.30", "torch>=2.0"]
 all = ["logscribe[openai,anthropic,metrics]"]
 dev = ["pytest>=8", "pytest-cov", "ruff==0.16.5", "mypy==2.3.1", "build", "pre-commit", "logscribe[all]"]
+# Pinned like ruff/mypy above -- unpinned docs tooling would make the docs
+# build green-or-red depending on someone else's release schedule. Not part
+# of [dev] or [all]: a contributor running tests shouldn't need a docs
+# toolchain installed.
+docs = [
+  "mkdocs==1.6.1",
+  "mkdocs-material==9.7.7",
+  "mkdocstrings[python]==1.0.6",
+  "mkdocstrings-python==2.0.7",
+  "pymdown-extensions==11.0.2",
+  "mkdocs-include-markdown-plugin==7.3.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/nadeem4/logscribe"

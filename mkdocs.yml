@@ -1,0 +1,74 @@
+site_name: logscribe
+site_description: AI-powered log analysis for Python logging -- batch, scrub PII, and route logs to an LLM for insights.
+site_url: https://nadeem4.github.io/logscribe/
+repo_url: https://github.com/nadeem4/logscribe
+repo_name: nadeem4/logscribe
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    absolute_links: warn
+    unrecognized_links: warn
+    anchors: warn
+
+nav:
+  - Home: index.md
+  - Configuration: configuration.md
+  - Privacy: PRIVACY.md
+  - API Reference: api.md
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+  - include-markdown:
+      rewrite_relative_urls: true
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            merge_init_into_class: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
