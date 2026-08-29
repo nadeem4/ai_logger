@@ -4,6 +4,9 @@
 
 [![CI](https://github.com/nadeem4/logscribe/actions/workflows/ci.yml/badge.svg)](https://github.com/nadeem4/logscribe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#installation)
+
+**Status: active development.** This project is under active development and testing, and has not been released to PyPI. APIs, configuration names, and metric names may change before the first release.
 
 ## Quickstart
 
@@ -73,6 +76,25 @@ sequenceDiagram
 **`QueueHandler`/`QueueListener` vs. attaching `AIHandler` directly.** `AIHandler` already does its batching, scrubbing, and provider calls on its own background thread — you can call `logger.addHandler(AIHandler(...))` directly and never touch a queue. Do that for a script, a one-off tool, or anywhere a few microseconds of `emit()` overhead per log call (buffering the record, checking the batch size) is a non-issue. Add `get_async_logging_setup()`'s `QueueHandler`/`QueueListener` pair on top when the calling thread itself must never block on that `emit()` overhead — e.g. a request-handling thread in a web server under load, or any latency-sensitive hot path — since `QueueHandler.emit()` only puts the record on a queue and returns immediately, deferring everything else to the listener thread. The Quickstart above uses the queue form because it's the safer default to copy-paste; three of the four files in `examples/` attach `AIHandler` directly because they're simple scripts where the distinction doesn't matter.
 
 ## Installation
+
+**Not yet on PyPI.** Install from source until the package is published:
+
+```bash
+pip install "logscribe[openai] @ git+https://github.com/nadeem4/logscribe.git"       # OpenAI provider
+pip install "logscribe[anthropic] @ git+https://github.com/nadeem4/logscribe.git"    # Anthropic provider
+pip install "logscribe[metrics] @ git+https://github.com/nadeem4/logscribe.git"      # Prometheus metrics
+pip install "logscribe[all] @ git+https://github.com/nadeem4/logscribe.git"          # openai + anthropic + metrics
+```
+
+Or clone and install editable:
+
+```bash
+git clone https://github.com/nadeem4/logscribe.git
+cd logscribe
+pip install -e ".[openai]"
+```
+
+Once published to PyPI, the same extras will install directly:
 
 ```bash
 pip install "logscribe[openai]"       # OpenAI provider
